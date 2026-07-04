@@ -1,0 +1,41 @@
+[project]
+name = "nexctf-sandbox"
+version = "0.1.0"
+description = "Sandboxed code execution for NexCTF, script checker and code runner via microsandbox microVMs."
+authors = [{ name = "NexCTF" }]
+requires-python = ">=3.13"
+dependencies = ["microsandbox>=0.5.3"]
+
+[project.urls]
+Repository = "https://github.com/NexCTF/Sandbox"
+
+[build-system]
+requires = ["uv_build>=0.11.23,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "ruff>=0.15.18",
+    "ty>=0.0.51",
+    # Host app isn't published; pinned via lockfile to the resolved commit at lock time.
+    "nexctf @ git+https://github.com/NexCTF/NexCTF.git@main#subdirectory=backend",
+]
+
+[project.entry-points."nexctf.plugins"]
+nexctf_sandbox = "nexctf_sandbox"
+
+[tool.nexctf]
+display_name = "Sandbox"
+
+[tool.nexctf.migrations]
+version_table = "alembic_version_nexctf_sandbox"
+models = ["nexctf_sandbox.solutions.runner", "nexctf_sandbox.solutions.script"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
