@@ -41,3 +41,5 @@ models = ["nexctf_sandbox.solutions.runner", "nexctf_sandbox.solutions.script"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = ["live: boots a real microVM, needs /dev/kvm"]
+addopts = "-m 'not live'"  # opt in with: pytest -m live
