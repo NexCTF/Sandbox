@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import pytest
 
@@ -137,3 +138,24 @@ async def test_concurrent_runs_are_capped(monkeypatch) -> None:
 
 async def _noop() -> None:
     pass
+
+
+async def test_payloads_are_not_logged_at_info(monkeypatch, caplog) -> None:
+    """For script solutions the checker source is where the flag lives, and a checker
+    that raises echoes it onto stderr — so payloads never reach INFO."""
+    fake, _ = _patch_sandbox(monkeypatch)
+    monkeypatch.setattr(fake, "shell", _returns_output("FLAG{secret}", "FLAG{secret}"))
+
+    with caplog.at_level(logging.INFO, logger=_sandbox.__name__):
+        await _sandbox.run_python("print('hi')", timeout=5)
+
+    assert "FLAG{secret}" not in caplog.text
+
+
+def _returns_output(stdout: str, stderr: str):
+    async def _shell(cmd, *, stdin=None, timeout=None):
+        result = _FakeShellResult(0, stdout)
+        result.stderr_text = stderr
+        return result
+
+    return _shell

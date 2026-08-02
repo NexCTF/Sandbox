@@ -16,6 +16,7 @@ _CPUS = 1
 _ROOT_DISK_MIB = 64
 _MEMORY_MIB = 256 + _ROOT_DISK_MIB  # the tmpfs root disk is charged to guest memory
 _MAX_OUTPUT_BYTES = 64 * 1024
+_LOG_PREVIEW_CHARS = 1024
 
 # One verify() costs N x (~1.1s boot + timeout) and nothing bounds the total, so the
 # per-run timeout is the only budget there is. Submission re-verification runs under
@@ -85,10 +86,18 @@ async def run_python(code: str, stdin: str = "", *, timeout: int) -> tuple[int, 
             stdin=stdin.encode() if stdin else None,
             timeout=float(timeout),
         )
+        # Payloads stay at debug: for script solutions the checker source is where the
+        # flag lives, and a checker that raises puts the offending source line into a
+        # traceback on stderr. Logs travel further than the flag should.
         logger.info(
-            "sandbox.run exit_code=%d stdout=%r stderr=%r",
+            "sandbox.run exit_code=%d out=%dB err=%dB",
             result.exit_code,
-            result.stdout_text,
-            result.stderr_text,
+            len(result.stdout_text),
+            len(result.stderr_text),
+        )
+        logger.debug(
+            "sandbox.io stdout=%r stderr=%r",
+            result.stdout_text[:_LOG_PREVIEW_CHARS],
+            result.stderr_text[:_LOG_PREVIEW_CHARS],
         )
         return result.exit_code, result.stdout_text
