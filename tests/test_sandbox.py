@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from nexctf_sandbox import _sandbox
@@ -104,3 +106,34 @@ async def test_sandbox_is_removed_when_the_run_raises(monkeypatch) -> None:
         await _sandbox.run_python("print('hi')", timeout=5)
 
     assert len(removed) == 1
+
+
+async def test_concurrent_runs_are_capped(monkeypatch) -> None:
+    """Nothing else limits how many microVMs exist at once — each is a vCPU plus
+    _MEMORY_MIB, and rate limiting is per user, not per host."""
+    live = 0
+    peak = 0
+
+    class _SlowSandbox(_FakeSandbox):
+        async def shell(self, cmd, *, stdin=None, timeout=None):
+            nonlocal live, peak
+            live += 1
+            peak = max(peak, live)
+            await asyncio.sleep(0)
+            live -= 1
+            return await super().shell(cmd, stdin=stdin, timeout=timeout)
+
+    async def _fake_create(name, **kwargs):
+        return _SlowSandbox()
+
+    monkeypatch.setattr(_sandbox.Sandbox, "create", _fake_create)
+    monkeypatch.setattr(_sandbox.Sandbox, "remove", lambda name: _noop())
+    monkeypatch.setattr(_sandbox, "_SLOTS", asyncio.Semaphore(2))
+
+    await asyncio.gather(*(_sandbox.run_python("x", timeout=5) for _ in range(10)))
+
+    assert peak <= 2
+
+
+async def _noop() -> None:
+    pass
