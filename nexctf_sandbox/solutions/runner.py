@@ -14,13 +14,15 @@ from microsandbox import ExecTimeoutError
 from nexctf.model.solution import Solution
 from nexctf.schema.solution import AdminSolutionRead
 from pydantic import Field
-from sqlalchemy import ForeignKey
+from sqlalchemy import CheckConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from nexctf_sandbox._sandbox import run_python
+from nexctf_sandbox._sandbox import MAX_TIMEOUT, MIN_TIMEOUT, run_python
 
 logger = logging.getLogger(__name__)
+
+MAX_TEST_CASES = 20  # each case is its own microVM, run one after the other
 
 
 class TestCase(PydanticBase):
@@ -39,11 +41,14 @@ class RunnerSolutionCreate(PydanticBase):
     question_id: UUID
     test_cases: list[TestCase] = Field(
         default=[],
+        max_length=MAX_TEST_CASES,
         title="Test cases",
         description="All test cases must pass for the answer to be accepted.",
     )
     timeout: int = Field(
         default=5,
+        ge=MIN_TIMEOUT,
+        le=MAX_TIMEOUT,
         title="Timeout (s)",
         description="Maximum seconds each test case may run.",
     )
@@ -51,8 +56,12 @@ class RunnerSolutionCreate(PydanticBase):
 
 class RunnerSolutionUpdate(PydanticBase):
     id: UUID
-    test_cases: list[TestCase] | None = Field(default=None, title="Test cases")
-    timeout: int | None = Field(default=None, title="Timeout (s)")
+    test_cases: list[TestCase] | None = Field(
+        default=None, max_length=MAX_TEST_CASES, title="Test cases"
+    )
+    timeout: int | None = Field(
+        default=None, ge=MIN_TIMEOUT, le=MAX_TIMEOUT, title="Timeout (s)"
+    )
 
 
 class RunnerSolutionRead(AdminSolutionRead):
@@ -78,6 +87,16 @@ class RunnerSolution(Solution):
 
     __tablename__ = "solutions_runner"
     __mapper_args__ = {"polymorphic_identity": "runner"}  # noqa: RUF012 — SQLAlchemy idiom
+    __table_args__ = (
+        CheckConstraint(
+            f"timeout BETWEEN {MIN_TIMEOUT} AND {MAX_TIMEOUT}",
+            name="ck_solutions_runner_timeout",
+        ),
+        CheckConstraint(
+            f"jsonb_array_length(test_cases) <= {MAX_TEST_CASES}",
+            name="ck_solutions_runner_test_cases",
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(ForeignKey("solutions.id"), primary_key=True)
     test_cases: Mapped[list[dict]] = mapped_column(JSONB, default=list)

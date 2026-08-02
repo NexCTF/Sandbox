@@ -18,10 +18,10 @@ from nexctf.model.solution import Solution
 from nexctf.schema.solution import AdminSolutionRead
 from nexctf.util.pydantic import CodeStr
 from pydantic import Field
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import CheckConstraint, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from nexctf_sandbox._sandbox import run_python
+from nexctf_sandbox._sandbox import MAX_TIMEOUT, MIN_TIMEOUT, run_python
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,8 @@ class ScriptSolutionCreate(PydanticBase):
     )
     timeout: int = Field(
         default=5,
+        ge=MIN_TIMEOUT,
+        le=MAX_TIMEOUT,
         title="Timeout (s)",
         description="Maximum seconds the checker may run before being killed.",
     )
@@ -65,6 +67,8 @@ class ScriptSolutionUpdate(PydanticBase):
     )
     timeout: int | None = Field(
         default=None,
+        ge=MIN_TIMEOUT,
+        le=MAX_TIMEOUT,
         title="Timeout (s)",
         description="Maximum seconds the checker may run before being killed.",
     )
@@ -99,6 +103,12 @@ class ScriptSolution(Solution):
 
     __tablename__ = "solutions_script"
     __mapper_args__ = {"polymorphic_identity": "script"}  # noqa: RUF012 — SQLAlchemy idiom
+    __table_args__ = (
+        CheckConstraint(
+            f"timeout BETWEEN {MIN_TIMEOUT} AND {MAX_TIMEOUT}",
+            name="ck_solutions_script_timeout",
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(ForeignKey("solutions.id"), primary_key=True)
     checker_code: Mapped[str] = mapped_column(Text)

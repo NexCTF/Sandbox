@@ -16,6 +16,13 @@ _ROOT_DISK_MIB = 64
 _MEMORY_MIB = 256 + _ROOT_DISK_MIB  # the tmpfs root disk is charged to guest memory
 _MAX_OUTPUT_BYTES = 64 * 1024
 
+# One verify() costs N x (~1.1s boot + timeout) and nothing bounds the total, so the
+# per-run timeout is the only budget there is. Submission re-verification runs under
+# an exclusive lock on the submissions table, where an unbounded timeout stalls
+# scoring platform-wide.
+MIN_TIMEOUT = 1  # 0 makes every answer silently wrong: exec times out at 0ns
+MAX_TIMEOUT = 30
+
 # Buffer output in the guest and hand back only the first _MAX_OUTPUT_BYTES of each
 # stream: untrusted code can print faster than the timeout ends, and whatever it
 # prints is held in the API process's memory. The exit code is the program's own.

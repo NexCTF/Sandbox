@@ -5,10 +5,13 @@ from __future__ import annotations
 import json
 from uuid import uuid4
 
+import pytest
 from microsandbox import ExecTimeoutError
 from nexctf.plugins.registry import solution_registry
 from nexctf.plugins.testing import assert_registered, assert_verifies
+from pydantic import ValidationError
 
+from nexctf_sandbox._sandbox import MAX_TIMEOUT
 from nexctf_sandbox.solutions import script
 from nexctf_sandbox.solutions.script import (
     _DEFAULT_CHECKER,
@@ -107,3 +110,9 @@ def test_create_schema_defaults() -> None:
     create = ScriptSolutionCreate(question_id=uuid4())
     assert create.timeout == 5
     assert create.checker_code == _DEFAULT_CHECKER
+
+
+def test_create_schema_rejects_unbounded_timeout() -> None:
+    for timeout in (0, MAX_TIMEOUT + 1):
+        with pytest.raises(ValidationError):
+            ScriptSolutionCreate(question_id=uuid4(), timeout=timeout)

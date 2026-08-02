@@ -4,17 +4,24 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
 from microsandbox import ExecTimeoutError
 from nexctf.plugins.registry import solution_registry
 from nexctf.plugins.testing import assert_registered, assert_verifies
+from pydantic import ValidationError
 
+from nexctf_sandbox._sandbox import MAX_TIMEOUT
 from nexctf_sandbox.solutions import runner
 from nexctf_sandbox.solutions.runner import (
+    MAX_TEST_CASES,
     RunnerSolution,
     RunnerSolutionCreate,
     RunnerSolutionRead,
     RunnerSolutionUpdate,
 )
+from nexctf_sandbox.solutions.runner import (
+    TestCase as _TestCase,
+)  # aliased: pytest collects TestCase*
 
 from .conftest import _returns
 
@@ -105,3 +112,17 @@ def test_create_schema_defaults() -> None:
     create = RunnerSolutionCreate(question_id=uuid4())
     assert create.timeout == 5
     assert create.test_cases == []
+
+
+def test_create_schema_rejects_unbounded_cost() -> None:
+    """One verify() costs N x (boot + timeout) with no total budget, so both factors
+    are capped at the schema."""
+    for timeout in (0, MAX_TIMEOUT + 1):  # 0 times out at 0ns: every answer wrong
+        with pytest.raises(ValidationError):
+            RunnerSolutionCreate(question_id=uuid4(), timeout=timeout)
+
+    with pytest.raises(ValidationError):
+        RunnerSolutionCreate(
+            question_id=uuid4(),
+            test_cases=[_TestCase(expected_output="x")] * (MAX_TEST_CASES + 1),
+        )
