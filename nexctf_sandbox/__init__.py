@@ -1,4 +1,6 @@
 from nexctf.enums import InputType
+from nexctf.plugins.registry import solution_registry
+
 from nexctf_sandbox.solutions.runner import (
     RunnerSolution,
     RunnerSolutionCreate,
@@ -11,7 +13,6 @@ from nexctf_sandbox.solutions.script import (
     ScriptSolutionRead,
     ScriptSolutionUpdate,
 )
-from nexctf.plugins.registry import solution_registry
 
 solution_registry.register(
     "runner",

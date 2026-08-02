@@ -5,9 +5,9 @@ from __future__ import annotations
 from uuid import uuid4
 
 from microsandbox import ExecTimeoutError
-
 from nexctf.plugins.registry import solution_registry
 from nexctf.plugins.testing import assert_registered, assert_verifies
+
 from nexctf_sandbox.solutions import runner
 from nexctf_sandbox.solutions.runner import (
     RunnerSolution,

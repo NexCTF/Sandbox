@@ -8,8 +8,9 @@ Create Date: 2026-04-18
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
+
+from alembic import op
 
 revision: str = "0001"
 down_revision: str | None = None

@@ -6,9 +6,9 @@ import json
 from uuid import uuid4
 
 from microsandbox import ExecTimeoutError
-
 from nexctf.plugins.registry import solution_registry
 from nexctf.plugins.testing import assert_registered, assert_verifies
+
 from nexctf_sandbox.solutions import script
 from nexctf_sandbox.solutions.script import (
     _DEFAULT_CHECKER,

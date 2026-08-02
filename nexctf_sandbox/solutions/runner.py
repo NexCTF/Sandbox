@@ -11,13 +11,13 @@ from uuid import UUID
 
 from fastapi_toolsets.schemas import PydanticBase
 from microsandbox import ExecTimeoutError
+from nexctf.model.solution import Solution
+from nexctf.schema.solution import AdminSolutionRead
 from pydantic import Field
 from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from nexctf.model.solution import Solution
-from nexctf.schema.solution import AdminSolutionRead
 from nexctf_sandbox._sandbox import run_python
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class RunnerSolution(Solution):
     """Runs submitted Python3 code against a set of test cases (all must pass)."""
 
     __tablename__ = "solutions_runner"
-    __mapper_args__ = {"polymorphic_identity": "runner"}
+    __mapper_args__ = {"polymorphic_identity": "runner"}  # noqa: RUF012 — SQLAlchemy idiom
 
     id: Mapped[UUID] = mapped_column(ForeignKey("solutions.id"), primary_key=True)
     test_cases: Mapped[list[dict]] = mapped_column(JSONB, default=list)

@@ -14,13 +14,13 @@ from uuid import UUID
 
 from fastapi_toolsets.schemas import PydanticBase
 from microsandbox import ExecTimeoutError
+from nexctf.model.solution import Solution
+from nexctf.schema.solution import AdminSolutionRead
+from nexctf.util.pydantic import CodeStr
 from pydantic import Field
 from sqlalchemy import ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from nexctf.model.solution import Solution
-from nexctf.schema.solution import AdminSolutionRead
-from nexctf.util.pydantic import CodeStr
 from nexctf_sandbox._sandbox import run_python
 
 logger = logging.getLogger(__name__)
@@ -98,7 +98,7 @@ class ScriptSolution(Solution):
     """Custom checker: admin provides a Python check(answer, team_id) -> bool function."""
 
     __tablename__ = "solutions_script"
-    __mapper_args__ = {"polymorphic_identity": "script"}
+    __mapper_args__ = {"polymorphic_identity": "script"}  # noqa: RUF012 — SQLAlchemy idiom
 
     id: Mapped[UUID] = mapped_column(ForeignKey("solutions.id"), primary_key=True)
     checker_code: Mapped[str] = mapped_column(Text)
