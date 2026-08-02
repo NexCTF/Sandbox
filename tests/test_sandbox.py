@@ -68,6 +68,19 @@ async def test_run_python_sends_none_for_empty_stdin(monkeypatch) -> None:
     assert fake.shell_kwargs["stdin"] is None
 
 
+async def test_output_is_capped_in_the_guest(monkeypatch) -> None:
+    """Untrusted code can print faster than the timeout ends and the whole payload
+    lands in the API process, so both streams are truncated before they come back."""
+    fake, _ = _patch_sandbox(monkeypatch)
+
+    await _sandbox.run_python("print('hi')", timeout=5)
+
+    assert fake.shell_kwargs is not None
+    cmd = fake.shell_kwargs["cmd"]
+    assert cmd.count(f"head -c {_sandbox._MAX_OUTPUT_BYTES}") == 2
+    assert "exit $rc" in cmd  # the program's own exit code, not head's
+
+
 async def test_sandbox_is_removed_not_just_killed(monkeypatch) -> None:
     """kill() leaves the registration and its disk on the host — remove() must follow,
     or every submission leaks host disk permanently."""

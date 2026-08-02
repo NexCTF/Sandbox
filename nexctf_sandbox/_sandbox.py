@@ -14,6 +14,18 @@ _IMAGE = "python:3.12-slim"
 _CPUS = 1
 _ROOT_DISK_MIB = 64
 _MEMORY_MIB = 256 + _ROOT_DISK_MIB  # the tmpfs root disk is charged to guest memory
+_MAX_OUTPUT_BYTES = 64 * 1024
+
+# Buffer output in the guest and hand back only the first _MAX_OUTPUT_BYTES of each
+# stream: untrusted code can print faster than the timeout ends, and whatever it
+# prints is held in the API process's memory. The exit code is the program's own.
+# Ceiling: the buffers live on the tmpfs root disk, so a program printing more than
+# _ROOT_DISK_MIB is OOM-killed (exit 137, no output) rather than truncated. That is
+# far past the cap either way; pipe through head if partial output ever matters.
+_RUN = (
+    f"python3 /code.py >/out 2>/err; rc=$?; "
+    f"head -c {_MAX_OUTPUT_BYTES} /out; head -c {_MAX_OUTPUT_BYTES} /err >&2; exit $rc"
+)
 
 
 @asynccontextmanager
@@ -54,7 +66,7 @@ async def run_python(code: str, stdin: str = "", *, timeout: int) -> tuple[int, 
         logger.info("sandbox.start stdin=%s timeout=%ds", bool(stdin), timeout)
         await sb.fs.write("/code.py", code.encode())
         result = await sb.shell(
-            "python3 /code.py",
+            _RUN,
             stdin=stdin.encode() if stdin else None,
             timeout=float(timeout),
         )
