@@ -19,9 +19,6 @@ from nexctf_sandbox.solutions.runner import (
     RunnerSolutionRead,
     RunnerSolutionUpdate,
 )
-from nexctf_sandbox.solutions.runner import (
-    TestCase as _TestCase,
-)  # aliased: pytest collects TestCase*
 
 from .conftest import _returns
 
@@ -124,5 +121,5 @@ def test_create_schema_rejects_unbounded_cost() -> None:
     with pytest.raises(ValidationError):
         RunnerSolutionCreate(
             question_id=uuid4(),
-            test_cases=[_TestCase(expected_output="x")] * (MAX_TEST_CASES + 1),
+            test_cases=[{"expected_output": "x"}] * (MAX_TEST_CASES + 1),
         )

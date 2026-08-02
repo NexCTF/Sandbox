@@ -11,10 +11,10 @@ from nexctf_sandbox import _sandbox
 
 
 class _FakeShellResult:
-    def __init__(self, exit_code: int, stdout_text: str) -> None:
+    def __init__(self, exit_code: int, stdout_text: str, stderr_text: str = "") -> None:
         self.exit_code = exit_code
         self.stdout_text = stdout_text
-        self.stderr_text = ""
+        self.stderr_text = stderr_text
 
 
 class _FakeFs:
@@ -71,17 +71,11 @@ async def test_run_python_sends_none_for_empty_stdin(monkeypatch) -> None:
     assert fake.shell_kwargs["stdin"] is None
 
 
-async def test_output_is_capped_in_the_guest(monkeypatch) -> None:
+def test_output_is_capped_in_the_guest() -> None:
     """Untrusted code can print faster than the timeout ends and the whole payload
     lands in the API process, so both streams are truncated before they come back."""
-    fake, _ = _patch_sandbox(monkeypatch)
-
-    await _sandbox.run_python("print('hi')", timeout=5)
-
-    assert fake.shell_kwargs is not None
-    cmd = fake.shell_kwargs["cmd"]
-    assert cmd.count(f"head -c {_sandbox._MAX_OUTPUT_BYTES}") == 2
-    assert "exit $rc" in cmd  # the program's own exit code, not head's
+    assert _sandbox._RUN.count(f"head -c {_sandbox._MAX_OUTPUT_BYTES}") == 2
+    assert "exit $rc" in _sandbox._RUN  # the program's own exit code, not head's
 
 
 async def test_sandbox_is_removed_not_just_killed(monkeypatch) -> None:
@@ -127,35 +121,26 @@ async def test_concurrent_runs_are_capped(monkeypatch) -> None:
     async def _fake_create(name, **kwargs):
         return _SlowSandbox()
 
+    _patch_sandbox(monkeypatch)
     monkeypatch.setattr(_sandbox.Sandbox, "create", _fake_create)
-    monkeypatch.setattr(_sandbox.Sandbox, "remove", lambda name: _noop())
     monkeypatch.setattr(_sandbox, "_SLOTS", asyncio.Semaphore(2))
 
     await asyncio.gather(*(_sandbox.run_python("x", timeout=5) for _ in range(10)))
 
-    assert peak <= 2
+    assert peak == 2
 
 
-async def _noop() -> None:
-    pass
-
-
-async def test_payloads_are_not_logged_at_info(monkeypatch, caplog) -> None:
+async def test_payloads_are_never_logged(monkeypatch, caplog) -> None:
     """For script solutions the checker source is where the flag lives, and a checker
-    that raises echoes it onto stderr — so payloads never reach INFO."""
+    that raises echoes it onto stderr — so payloads are not logged at any level."""
     fake, _ = _patch_sandbox(monkeypatch)
-    monkeypatch.setattr(fake, "shell", _returns_output("FLAG{secret}", "FLAG{secret}"))
 
-    with caplog.at_level(logging.INFO, logger=_sandbox.__name__):
+    async def _shell(cmd, *, stdin=None, timeout=None):
+        return _FakeShellResult(0, "FLAG{secret}", "FLAG{secret}")
+
+    monkeypatch.setattr(fake, "shell", _shell)
+
+    with caplog.at_level(logging.DEBUG, logger=_sandbox.__name__):
         await _sandbox.run_python("print('hi')", timeout=5)
 
     assert "FLAG{secret}" not in caplog.text
-
-
-def _returns_output(stdout: str, stderr: str):
-    async def _shell(cmd, *, stdin=None, timeout=None):
-        result = _FakeShellResult(0, stdout)
-        result.stderr_text = stderr
-        return result
-
-    return _shell
