@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from nexctf_sandbox import _sandbox
 
 
@@ -30,15 +32,26 @@ class _FakeSandbox:
         pass
 
 
-async def test_run_python_sends_stdin_as_bytes(monkeypatch) -> None:
-    """microsandbox reads a bare str as a stdin mode name, not data — regression guard
-    for a bug where plain str stdin raised ``ValueError: unknown stdin mode``."""
+def _patch_sandbox(monkeypatch) -> tuple[_FakeSandbox, list[str]]:
+    """Swap Sandbox.create/remove for fakes; return the fake VM and the removed names."""
     fake = _FakeSandbox()
+    removed: list[str] = []
 
     async def _fake_create(name, **kwargs):
         return fake
 
+    async def _fake_remove(name):
+        removed.append(name)
+
     monkeypatch.setattr(_sandbox.Sandbox, "create", _fake_create)
+    monkeypatch.setattr(_sandbox.Sandbox, "remove", _fake_remove)
+    return fake, removed
+
+
+async def test_run_python_sends_stdin_as_bytes(monkeypatch) -> None:
+    """microsandbox reads a bare str as a stdin mode name, not data — regression guard
+    for a bug where plain str stdin raised ``ValueError: unknown stdin mode``."""
+    fake, _ = _patch_sandbox(monkeypatch)
 
     await _sandbox.run_python("print('hi')", "hello world", timeout=5)
 
@@ -47,14 +60,34 @@ async def test_run_python_sends_stdin_as_bytes(monkeypatch) -> None:
 
 
 async def test_run_python_sends_none_for_empty_stdin(monkeypatch) -> None:
-    fake = _FakeSandbox()
-
-    async def _fake_create(name, **kwargs):
-        return fake
-
-    monkeypatch.setattr(_sandbox.Sandbox, "create", _fake_create)
+    fake, _ = _patch_sandbox(monkeypatch)
 
     await _sandbox.run_python("print('hi')", "", timeout=5)
 
     assert fake.shell_kwargs is not None
     assert fake.shell_kwargs["stdin"] is None
+
+
+async def test_sandbox_is_removed_not_just_killed(monkeypatch) -> None:
+    """kill() leaves the registration and its disk on the host — remove() must follow,
+    or every submission leaks host disk permanently."""
+    _, removed = _patch_sandbox(monkeypatch)
+
+    await _sandbox.run_python("print('hi')", timeout=5)
+
+    assert len(removed) == 1
+    assert removed[0].startswith("nexctf-")
+
+
+async def test_sandbox_is_removed_when_the_run_raises(monkeypatch) -> None:
+    fake, removed = _patch_sandbox(monkeypatch)
+
+    async def _boom(*args, **kwargs):
+        raise RuntimeError("exec blew up")
+
+    monkeypatch.setattr(fake, "shell", _boom)
+
+    with pytest.raises(RuntimeError):
+        await _sandbox.run_python("print('hi')", timeout=5)
+
+    assert len(removed) == 1

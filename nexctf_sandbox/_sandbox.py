@@ -6,32 +6,43 @@ import logging
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
-from microsandbox import Network, Sandbox
+from microsandbox import Image, Network, RootDisk, Sandbox
 
 logger = logging.getLogger(__name__)
 
 _IMAGE = "python:3.12-slim"
 _CPUS = 1
-_MEMORY_MIB = 256
+_ROOT_DISK_MIB = 64
+_MEMORY_MIB = 256 + _ROOT_DISK_MIB  # the tmpfs root disk is charged to guest memory
 
 
 @asynccontextmanager
 async def _ephemeral():
     name = f"nexctf-{uuid4().hex}"
-    sb = await Sandbox.create(
-        name,
-        image=_IMAGE,
-        cpus=_CPUS,
-        memory=_MEMORY_MIB,
-        network=Network.none(),
-    )
+    sb = None
     try:
+        sb = await Sandbox.create(
+            name,
+            # tmpfs root disk: guest writes are RAM-backed and capped, so code that
+            # fills the disk costs the host nothing and dies with the VM.
+            image=Image.oci(_IMAGE, root_disk=RootDisk.tmpfs(_ROOT_DISK_MIB)),
+            cpus=_CPUS,
+            memory=_MEMORY_MIB,
+            network=Network.none(),
+        )
         yield sb
     finally:
+        if sb is not None:
+            try:
+                await sb.kill()
+            except Exception:
+                logger.warning("sandbox.kill failed name=%s", name, exc_info=True)
         try:
-            await sb.kill()
+            # kill() only stops the VM; without remove() the registration and its
+            # disk survive every submission, forever.
+            await Sandbox.remove(name)
         except Exception:
-            logger.debug("sandbox.kill failed name=%s", name, exc_info=True)
+            logger.warning("sandbox.remove failed name=%s", name, exc_info=True)
 
 
 async def run_python(code: str, stdin: str = "", *, timeout: int) -> tuple[int, str]:
