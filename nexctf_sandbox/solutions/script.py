@@ -1,10 +1,4 @@
-"""Script checker solution — runs an admin-provided Python checker in a microVM.
-
-Bundles the model, schemas, and microsandbox runner for the ``script`` solution
-type in a single module. The admin writes a complete
-``check(answer, team_id) -> bool`` function; input is passed via stdin as JSON
-and exit code 0 means correct.
-"""
+"""Script checker solution: runs an admin-provided Python checker in a microVM."""
 
 from __future__ import annotations
 

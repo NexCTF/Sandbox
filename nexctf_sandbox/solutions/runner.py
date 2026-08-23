@@ -1,8 +1,4 @@
-"""Runner solution — executes player Python3 code against test cases.
-
-Bundles the model, schemas, and microsandbox runner for the ``runner``
-solution type in a single module.
-"""
+"""Runner solution: executes player Python3 code against test cases."""
 
 from __future__ import annotations
 
