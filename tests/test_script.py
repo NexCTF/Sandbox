@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 from microsandbox import ExecTimeoutError
+from nexctf.exceptions import SolutionTimeoutError
 from nexctf.plugins.registry import solution_registry
 from nexctf.plugins.testing import assert_registered, assert_verifies
 from pydantic import ValidationError
@@ -38,14 +39,16 @@ async def test_verify_false_when_checker_exits_nonzero(patch_run_python) -> None
     )
 
 
-async def test_verify_false_on_timeout(patch_run_python) -> None:
+async def test_verify_raises_on_timeout(patch_run_python) -> None:
+    """Swallowing this into False marks a correct answer wrong whenever the sandbox
+    host is merely loaded, and hides the load from the admin event feed."""
+
     async def _timeout(code, stdin="", *, timeout):
         raise ExecTimeoutError("timed out")
 
     patch_run_python(script, _timeout)
-    await assert_verifies(
-        ScriptSolution(checker_code="...", timeout=5), [("ans", False)]
-    )
+    with pytest.raises(SolutionTimeoutError):
+        await ScriptSolution(checker_code="...", timeout=5).verify("ans")
 
 
 async def test_verify_false_on_unexpected_error(patch_run_python) -> None:

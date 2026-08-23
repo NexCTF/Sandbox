@@ -14,6 +14,7 @@ from uuid import UUID
 
 from fastapi_toolsets.schemas import PydanticBase
 from microsandbox import ExecTimeoutError
+from nexctf.exceptions import SolutionTimeoutError
 from nexctf.model.solution import Solution
 from nexctf.schema.solution import AdminSolutionRead
 from nexctf.util.pydantic import CodeStr
@@ -91,8 +92,7 @@ async def run_checker(
         exit_code, _ = await run_python(code, stdin, timeout=timeout)
         return exit_code == 0
     except ExecTimeoutError:
-        logger.warning("script.checker timed out team_id=%s", team_id)
-        return False
+        raise
     except Exception:
         logger.exception("script.checker failed team_id=%s", team_id)
         return False
@@ -115,4 +115,10 @@ class ScriptSolution(Solution):
     timeout: Mapped[int] = mapped_column(default=5)
 
     async def verify(self, submission: str, *, team_id: UUID | None = None) -> bool:
-        return await run_checker(self.checker_code, submission, team_id, self.timeout)
+        try:
+            return await run_checker(
+                self.checker_code, submission, team_id, self.timeout
+            )
+        except ExecTimeoutError as exc:
+            logger.warning("script.checker timed out solution_id=%s", self.id)
+            raise SolutionTimeoutError(self.id) from exc

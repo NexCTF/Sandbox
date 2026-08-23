@@ -11,6 +11,7 @@ from uuid import UUID
 
 from fastapi_toolsets.schemas import PydanticBase
 from microsandbox import ExecTimeoutError
+from nexctf.exceptions import SolutionTimeoutError
 from nexctf.model.solution import Solution
 from nexctf.schema.solution import AdminSolutionRead
 from pydantic import Field
@@ -70,13 +71,16 @@ class RunnerSolutionRead(AdminSolutionRead):
 
 
 async def run_code(code: str, stdin: str, timeout: int) -> str | None:
-    """Execute player *code* in an isolated microVM and return stdout, or None on error/timeout."""
+    """Execute player *code* in an isolated microVM and return stdout, or None on error.
+
+    Raises ``ExecTimeoutError`` on timeout: a timeout says nothing about the answer,
+    so it must not be flattened into "wrong".
+    """
     try:
         exit_code, stdout = await run_python(code, stdin, timeout=timeout)
         return stdout if exit_code == 0 else None
     except ExecTimeoutError:
-        logger.warning("runner timed out")
-        return None
+        raise
     except Exception:
         logger.exception("runner failed")
         return None
@@ -108,7 +112,11 @@ class RunnerSolution(Solution):
         for tc in self.test_cases:
             stdin = tc.get("input", "")
             expected = tc.get("expected_output", "")
-            actual = await run_code(submission, stdin, self.timeout)
+            try:
+                actual = await run_code(submission, stdin, self.timeout)
+            except ExecTimeoutError as exc:
+                logger.warning("runner timed out solution_id=%s", self.id)
+                raise SolutionTimeoutError(self.id) from exc
             if actual is None or actual.strip() != expected.strip():
                 return False
         return True

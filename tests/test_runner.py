@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 from microsandbox import ExecTimeoutError
+from nexctf.exceptions import SolutionTimeoutError
 from nexctf.plugins.registry import solution_registry
 from nexctf.plugins.testing import assert_registered, assert_verifies
 from pydantic import ValidationError
@@ -81,8 +82,10 @@ async def test_verify_false_on_nonzero_exit(patch_run_python) -> None:
     await assert_verifies(solution, [("code", False)])
 
 
-async def test_verify_false_on_timeout(patch_run_python) -> None:
-    """A microVM timeout is caught and rejected rather than propagated."""
+async def test_verify_raises_on_timeout(patch_run_python) -> None:
+    """A loaded host must not turn a correct answer into a wrong one silently: the
+    platform has a first-class SolutionTimeoutError and emits solution.timeout admin
+    events for it, so the timeout is converted, not swallowed into False."""
 
     async def _timeout(code, stdin="", *, timeout):
         raise ExecTimeoutError("timed out")
@@ -91,7 +94,8 @@ async def test_verify_false_on_timeout(patch_run_python) -> None:
     solution = RunnerSolution(
         test_cases=[{"input": "", "expected_output": "42"}], timeout=5
     )
-    await assert_verifies(solution, [("code", False)])
+    with pytest.raises(SolutionTimeoutError):
+        await solution.verify("code")
 
 
 def test_runner_is_registered() -> None:
