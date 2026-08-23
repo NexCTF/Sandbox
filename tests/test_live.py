@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from microsandbox import ExecTimeoutError, Sandbox
 
-from nexctf_sandbox._sandbox import _MAX_OUTPUT_BYTES, run_python
+from nexctf_sandbox._sandbox import _MAX_OUTPUT_BYTES, python_runner, run_python
 
 pytestmark = [
     pytest.mark.live,
@@ -104,6 +104,14 @@ async def test_network_is_denied() -> None:
     )
 
     assert (exit_code, stdout.strip()) == (0, "denied")
+
+
+async def test_one_vm_serves_several_runs() -> None:
+    """RunnerSolution.verify runs all its test cases on a single VM, so the exec path
+    has to survive a second call — and the guest state the first run leaves is shared."""
+    async with python_runner() as run:
+        assert await run("open('/marker', 'w').write('1')", timeout=20) == (0, "")
+        assert await run("print(open('/marker').read())", timeout=20) == (0, "1\n")
 
 
 async def test_timeout_raises_rather_than_hanging() -> None:

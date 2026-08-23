@@ -8,6 +8,7 @@ without KVM or a network.
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import asynccontextmanager
 
 import pytest
 
@@ -38,5 +39,25 @@ def patch_run_python(
 
     def _patch(module: object, fake: Callable) -> None:
         monkeypatch.setattr(module, "run_python", fake)
+
+    return _patch
+
+
+@pytest.fixture
+def patch_python_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[object, Callable], None]:
+    """Like :func:`patch_run_python`, for modules that reuse one VM across runs.
+
+    The stub has the same signature; it is just handed out by a context manager
+    instead of being called directly.
+    """
+
+    def _patch(module: object, fake: Callable) -> None:
+        @asynccontextmanager
+        async def _runner():
+            yield fake
+
+        monkeypatch.setattr(module, "python_runner", _runner)
 
     return _patch

@@ -23,7 +23,7 @@ from nexctf_sandbox._sandbox import (
     MAX_PAYLOAD_CHARS,
     MAX_TIMEOUT,
     MIN_TIMEOUT,
-    run_python,
+    python_runner,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,14 +77,14 @@ class RunnerSolutionRead(AdminSolutionRead):
     timeout: int
 
 
-async def run_code(code: str, stdin: str, timeout: int) -> str | None:
-    """Execute player *code* in an isolated microVM and return stdout, or None on error.
+async def run_code(run, code: str, stdin: str, timeout: int) -> str | None:
+    """Execute player *code* on *run*'s microVM and return stdout, or None on error.
 
     Raises ``ExecTimeoutError`` on timeout: a timeout says nothing about the answer,
     so it must not be flattened into "wrong".
     """
     try:
-        exit_code, stdout = await run_python(code, stdin, timeout=timeout)
+        exit_code, stdout = await run(code, stdin, timeout=timeout)
         return stdout if exit_code == 0 else None
     except ExecTimeoutError:
         raise
@@ -122,14 +122,17 @@ class RunnerSolution(Solution):
     async def verify(self, submission: str, *, team_id=None) -> bool:
         if not self.test_cases:
             return False
-        for tc in self.test_cases:
-            stdin = tc.get("input", "")
-            expected = tc.get("expected_output", "")
-            try:
-                actual = await run_code(submission, stdin, self.timeout)
-            except ExecTimeoutError as exc:
-                logger.warning("runner timed out solution_id=%s", self.id)
-                raise SolutionTimeoutError(self.id) from exc
-            if actual is None or actual.strip() != expected.strip():
-                return False
+        try:
+            # One VM for the whole submission: booting one per case cost ~1.1s each.
+            # The cases see each other's guest state; they cannot see another player.
+            async with python_runner() as run:
+                for tc in self.test_cases:
+                    stdin = tc.get("input", "")
+                    expected = tc.get("expected_output", "")
+                    actual = await run_code(run, submission, stdin, self.timeout)
+                    if actual is None or actual.strip() != expected.strip():
+                        return False
+        except ExecTimeoutError as exc:
+            logger.warning("runner timed out solution_id=%s", self.id)
+            raise SolutionTimeoutError(self.id) from exc
         return True
