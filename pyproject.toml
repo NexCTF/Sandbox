@@ -6,7 +6,7 @@ authors = [
     { name = "NexCTF", email = "contact@nexctf.dev" }
 ]
 requires-python = ">=3.14"
-dependencies = ["microsandbox>=0.6.8"]
+dependencies = ["microsandbox>=0.6.14"]
 
 [project.urls]
 Repository = "https://github.com/NexCTF/Sandbox"
