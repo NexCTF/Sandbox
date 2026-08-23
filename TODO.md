@@ -51,6 +51,40 @@ One commit each on `hardening`, verified against live microVMs (see foot of file
   on a secrecy problem.
   (`%r` already escapes newlines — log forging is *not* possible, do not add escaping.)
 
+- [x] **6. Timeouts are scored as wrong answers** — `run_code` in `runner.py`, `run_checker`
+  in `script.py`
+  The platform has a first-class `SolutionTimeoutError` and emits `solution.timeout`
+  admin events; this plugin swallowed both into `False`, so a timeout was
+  indistinguishable from a wrong answer and a player driving the box into timeouts was
+  invisible.
+  Fix: `run_code`/`run_checker` re-raise `ExecTimeoutError`; `verify()` converts it to
+  `SolutionTimeoutError(self.id)`, which is where the solution id lives. Everything
+  else is still swallowed into `False`.
+  Scope: this buys admin visibility, not a different verdict — both call sites
+  (`api/routes/challenge.py`, `module/submission.py`) still leave `is_correct` False
+  and count the malus. Changing that is the platform's call.
+
+- [x] **7. One microVM per test case, sequentially** (speed, ~9x) — `RunnerSolution.verify`
+  Fix: `_sandbox.python_runner()`, a context manager yielding a `run()` bound to one
+  booted VM; `verify()` opens it once per submission. Re-measured after the change:
+  **10 cases 8.78s → 1.03s (8.5x)**, 3 cases 2.62s → 0.92s.
+  The semaphore slot is now held for the whole block instead of per case — fewer total
+  VM-seconds, and a submission that has a slot finishes on it.
+  Behavioral: cases within one submission share guest state. No cross-player reach and
+  no way to learn `expected_output`, so not a cheat vector.
+
+- [x] **8. No size bound on anything crossing the boundary** — `ScriptSolutionCreate.checker_code`,
+  `TestCase` in `runner.py`
+  `CodeStr` carries a UI hint, not a length, so a 50 MB checker was formatted, encoded
+  and written into the guest on every submission — and stored rows are re-verified in a
+  loop under an exclusive lock, so the cost is paid per row.
+  Fix: one cap, `MAX_PAYLOAD_CHARS` = 64 KiB, on `checker_code`, `TestCase.input` and
+  `expected_output`. It is the output cap by construction: stdout never returns longer
+  than `_MAX_OUTPUT_BYTES`, so a longer `expected_output` could never match. DB
+  `CheckConstraint`s alongside for the same reason as 3 — `length(checker_code)` exactly,
+  and one ceiling on the whole `test_cases` blob, because a `CHECK` cannot walk a jsonb
+  array (no subqueries). Both verified against postgres:17.
+
 ## Next
 
 - [ ] **10. `Network.none()` is not enforced — untrusted code has full egress** (critical,
@@ -68,32 +102,20 @@ One commit each on `hardening`, verified against live microVMs (see foot of file
   attack third parties from the CTF's IP.
   Not fixable in this plugin — it is a host capability, and CI cannot check it either:
   `test_network_is_denied` skips on GitHub runners too (no `CAP_NET_ADMIN`), so the
-  other six live tests passing there says nothing about egress. **Run `pytest -m live`
+  other seven live tests passing there says nothing about egress. Still true on
+  microsandbox 0.6.14 — 0.6.9's network work is DNS failover and TCP half-close, not
+  enforcement. **Run `pytest -m live`
   on the real sandbox host before an event** and give that host its own egress
   firewalling.
-
-- [ ] **6. Timeouts are scored as wrong answers** — `run_code` in `runner.py`, `run_checker` in `script.py`
-  The platform has a first-class `SolutionTimeoutError` and emits `solution.timeout`
-  admin events; this plugin swallows both into `False`. A correct solution is marked
-  wrong whenever the sandbox host is merely loaded, and a player driving the box
-  into timeouts is invisible to admins. Scoring integrity, not a nit.
-
-- [ ] **7. One microVM per test case, sequentially** (speed, ~9×) — `RunnerSolution.verify`
-  Measured: 3 cases = 3.07 s fresh-VM each vs **1.05 s** reusing one VM; 10 cases go
-  ~10 s → ~1.2 s. Open `_ephemeral()` once per submission instead of once per case.
-  Tradeoff: cases share VM state within a submission. The player cannot reach other
-  players or learn `expected_output`, so it is not a cheat vector — but it is the
-  one item here with a behavioral change, so it ships on its own.
-
-- [ ] **8. No size bound on anything crossing the boundary** — `ScriptSolutionCreate.checker_code`, `TestCase` in `runner.py`
-  `checker_code`, `TestCase.input` and `expected_output` are unbounded strings. A
-  50 MB checker is formatted, encoded and shipped into the VM on every submission.
 
 - [ ] **9. Mutable image tag, pulled inside the request** — `_IMAGE` in `_sandbox.py`
   `python:3.12-slim` is unpinned with an `if-missing` pull policy, so the first
   submission after a deploy pays a ~50 MB pull inside the HTTP request. Player code
   also runs on 3.12 while the platform now targets 3.14. Pin by digest, warm the
   image at startup, and move to 3.14 deliberately — it changes what code passes.
+  Left for the operator on purpose: the digest pin is two characters of work, but it
+  freezes base-image security updates until someone bumps it, and 3.12 → 3.14 decides
+  which player submissions still pass. Neither is the plugin's call to make quietly.
 
 ## Accepted, documented
 
@@ -133,10 +155,11 @@ Verified as already handled by microsandbox — adding defenses here is pure com
   HTTP session pooling.** The last one has nothing to pool — the client is a native
   extension over a local unix socket.
 
-## Live verification (2026-08-02)
+## Live verification (2026-08-02, re-run 2026-08-23 on microsandbox 0.6.14)
 
 Now encoded as `tests/test_live.py` (`pytest -m live`, auto-skipped without
-`/dev/kvm`); the fast suite is `pytest -m "not live"`. Findings when written:
+`/dev/kvm`); the fast suite is `pytest -m "not live"`. On 0.6.14: 7 passed, 1
+skipped (`test_network_is_denied`, per item 10). Findings when written:
 
 - exit code and both streams survive the guest-side buffering (`rc=3`, stdout
   `hello`, stderr captured); stdin still round-trips.
