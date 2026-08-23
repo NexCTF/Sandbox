@@ -29,6 +29,8 @@ MIN_TIMEOUT = 1  # 0 times out at 0ns, making every answer silently wrong
 MAX_TIMEOUT = 30
 
 # Per-process, so the host ceiling is this x worker count.
+# ponytail: fixed at import, not a plugin setting — asyncio.Semaphore has no resize,
+# so a settings UI would silently not apply until restart. Make it one if that lands.
 _SLOTS = asyncio.Semaphore(8)
 
 # Truncate in the guest: untrusted code outprints the timeout, and it lands in our RAM.
@@ -91,7 +93,7 @@ async def python_runner():
     """Yield ``run(code, stdin, *, timeout) -> (exit_code, stdout)`` on one microVM.
 
     Boot is ~1.1s and dominates a short run, so a caller with several runs to make
-    should reuse one VM: 3 runs measured 3.07s fresh-VM-each vs 1.05s shared.
+    should reuse one VM: 10 runs measured 8.78s fresh-VM-each vs 1.03s shared.
     Runs share guest state, so only ever reuse within a single submission.
 
     A slot is held for the whole block rather than per run — the total VM-seconds
