@@ -22,8 +22,9 @@ _MAX_OUTPUT_BYTES = 64 * 1024
 # stdout never comes back longer, so a longer expectation can never match.
 MAX_PAYLOAD_CHARS = _MAX_OUTPUT_BYTES
 
-# The per-run timeout is the only budget: one verify() costs N x (~1.1s boot + timeout),
-# so a runner question still tops out around MAX_TEST_CASES x MAX_TIMEOUT.
+# The per-run timeout is the only budget: one verify() costs ~1.1s boot + N x timeout
+# (one boot, not N, since the cases share a VM), so a runner question still tops out
+# around MAX_TEST_CASES x MAX_TIMEOUT.
 MIN_TIMEOUT = 1  # 0 times out at 0ns, making every answer silently wrong
 MAX_TIMEOUT = 30
 
@@ -95,6 +96,8 @@ async def python_runner():
 
     A slot is held for the whole block rather than per run — the total VM-seconds
     are lower either way, and a submission that gets a slot now finishes on it.
+    ponytail: that makes worst-case occupancy a whole submission (MAX_TEST_CASES x
+    MAX_TIMEOUT) rather than one run; split the slot per run if fairness bites.
     """
     async with _SLOTS, _ephemeral() as sb:
         yield partial(_exec, sb)

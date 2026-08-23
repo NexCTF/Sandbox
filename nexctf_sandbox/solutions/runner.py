@@ -28,7 +28,7 @@ from nexctf_sandbox._sandbox import (
 
 logger = logging.getLogger(__name__)
 
-MAX_TEST_CASES = 20  # each case is its own microVM, run one after the other
+MAX_TEST_CASES = 20  # all of them share one microVM, run one after the other
 
 
 class TestCase(PydanticBase):

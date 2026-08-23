@@ -55,14 +55,20 @@ async def test_verify_false_when_one_case_mismatches(patch_python_runner) -> Non
     await assert_verifies(solution, [("any code", False)])
 
 
-async def test_verify_false_when_no_test_cases(patch_python_runner) -> None:
-    """A solution with no test cases can never be satisfied (and never runs code)."""
+async def test_verify_false_when_no_test_cases(monkeypatch) -> None:
+    """A solution with no test cases can never be satisfied, so it must not pay a boot."""
+    boots = 0
 
-    async def _boom(*args, **kwargs):  # pragma: no cover - must not be called
-        raise AssertionError("no VM should be booted without test cases")
+    @asynccontextmanager
+    async def _runner():
+        nonlocal boots
+        boots += 1
+        yield _echo_stdin
 
-    patch_python_runner(runner, _boom)
+    monkeypatch.setattr(runner, "python_runner", _runner)
     await assert_verifies(RunnerSolution(test_cases=[], timeout=5), [("code", False)])
+
+    assert boots == 0
 
 
 async def test_verify_strips_whitespace_before_comparing(patch_python_runner) -> None:
