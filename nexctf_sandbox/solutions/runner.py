@@ -19,7 +19,12 @@ from sqlalchemy import CheckConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from nexctf_sandbox._sandbox import MAX_TIMEOUT, MIN_TIMEOUT, run_python
+from nexctf_sandbox._sandbox import (
+    MAX_PAYLOAD_CHARS,
+    MAX_TIMEOUT,
+    MIN_TIMEOUT,
+    run_python,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +34,12 @@ MAX_TEST_CASES = 20  # each case is its own microVM, run one after the other
 class TestCase(PydanticBase):
     input: str = Field(
         default="",
+        max_length=MAX_PAYLOAD_CHARS,
         title="Input (stdin)",
         description="Text fed to the program on stdin.",
     )
     expected_output: str = Field(
+        max_length=MAX_PAYLOAD_CHARS,
         title="Expected output",
         description="Expected stdout, compared after stripping whitespace.",
     )
@@ -99,6 +106,12 @@ class RunnerSolution(Solution):
         CheckConstraint(
             f"jsonb_array_length(test_cases) <= {MAX_TEST_CASES}",
             name="ck_solutions_runner_test_cases",
+        ),
+        # Backstop for the per-field max_length above: one ceiling on the whole blob,
+        # because a CHECK cannot walk the array (no subqueries).
+        CheckConstraint(
+            f"length(test_cases::text) <= {MAX_TEST_CASES * 2 * MAX_PAYLOAD_CHARS}",
+            name="ck_solutions_runner_test_cases_size",
         ),
     )
 

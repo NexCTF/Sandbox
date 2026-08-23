@@ -12,7 +12,7 @@ from nexctf.plugins.registry import solution_registry
 from nexctf.plugins.testing import assert_registered, assert_verifies
 from pydantic import ValidationError
 
-from nexctf_sandbox._sandbox import MAX_TIMEOUT
+from nexctf_sandbox._sandbox import MAX_PAYLOAD_CHARS, MAX_TIMEOUT
 from nexctf_sandbox.solutions import script
 from nexctf_sandbox.solutions.script import (
     _DEFAULT_CHECKER,
@@ -119,3 +119,12 @@ def test_create_schema_rejects_unbounded_timeout() -> None:
     for timeout in (0, MAX_TIMEOUT + 1):
         with pytest.raises(ValidationError):
             ScriptSolutionCreate(question_id=uuid4(), timeout=timeout)
+
+
+def test_create_schema_bounds_checker_code() -> None:
+    """CodeStr carries a UI hint, not a length bound — a 50 MB checker would be
+    formatted, encoded and shipped into the VM on every submission."""
+    with pytest.raises(ValidationError):
+        ScriptSolutionCreate(
+            question_id=uuid4(), checker_code="x" * (MAX_PAYLOAD_CHARS + 1)
+        )

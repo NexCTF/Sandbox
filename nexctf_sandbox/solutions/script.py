@@ -22,7 +22,12 @@ from pydantic import Field
 from sqlalchemy import CheckConstraint, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from nexctf_sandbox._sandbox import MAX_TIMEOUT, MIN_TIMEOUT, run_python
+from nexctf_sandbox._sandbox import (
+    MAX_PAYLOAD_CHARS,
+    MAX_TIMEOUT,
+    MIN_TIMEOUT,
+    run_python,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +52,7 @@ class ScriptSolutionCreate(PydanticBase):
     question_id: UUID
     checker_code: CodeStr = Field(
         default=_DEFAULT_CHECKER,
+        max_length=MAX_PAYLOAD_CHARS,
         title="Checker function",
         description="Python function check(answer, team_id) → bool. Return True to accept the answer.",
     )
@@ -63,6 +69,7 @@ class ScriptSolutionUpdate(PydanticBase):
     id: UUID
     checker_code: CodeStr | None = Field(
         default=None,
+        max_length=MAX_PAYLOAD_CHARS,
         title="Checker function",
         description="Python function check(answer, team_id) → bool. Return True to accept the answer.",
     )
@@ -107,6 +114,10 @@ class ScriptSolution(Solution):
         CheckConstraint(
             f"timeout BETWEEN {MIN_TIMEOUT} AND {MAX_TIMEOUT}",
             name="ck_solutions_script_timeout",
+        ),
+        CheckConstraint(
+            f"length(checker_code) <= {MAX_PAYLOAD_CHARS}",
+            name="ck_solutions_script_checker_code",
         ),
     )
 

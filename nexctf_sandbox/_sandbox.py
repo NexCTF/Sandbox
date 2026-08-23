@@ -16,6 +16,10 @@ _CPUS = 1
 _ROOT_DISK_MIB = 64
 _MEMORY_MIB = 256 + _ROOT_DISK_MIB  # the tmpfs root disk is charged to guest memory
 _MAX_OUTPUT_BYTES = 64 * 1024
+# Admin-authored text shipped into the VM on every single submission. Same size as
+# the output cap, which for expected_output is exactly where it stops being useful:
+# stdout never comes back longer, so a longer expectation can never match.
+MAX_PAYLOAD_CHARS = _MAX_OUTPUT_BYTES
 
 # The per-run timeout is the only budget: one verify() costs N x (~1.1s boot + timeout),
 # so a runner question still tops out around MAX_TEST_CASES x MAX_TIMEOUT.

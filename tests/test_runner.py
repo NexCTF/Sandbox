@@ -11,7 +11,7 @@ from nexctf.plugins.registry import solution_registry
 from nexctf.plugins.testing import assert_registered, assert_verifies
 from pydantic import ValidationError
 
-from nexctf_sandbox._sandbox import MAX_TIMEOUT
+from nexctf_sandbox._sandbox import MAX_PAYLOAD_CHARS, MAX_TIMEOUT
 from nexctf_sandbox.solutions import runner
 from nexctf_sandbox.solutions.runner import (
     MAX_TEST_CASES,
@@ -127,3 +127,15 @@ def test_create_schema_rejects_unbounded_cost() -> None:
             question_id=uuid4(),
             test_cases=[{"expected_output": "x"}] * (MAX_TEST_CASES + 1),
         )
+
+
+def test_create_schema_bounds_test_case_payloads() -> None:
+    """input and expected_output ship into the VM on every submission, so neither is
+    unbounded; expected_output past the output cap could never match anyway."""
+    oversized = "x" * (MAX_PAYLOAD_CHARS + 1)
+    for case in (
+        {"expected_output": oversized},
+        {"input": oversized, "expected_output": "x"},
+    ):
+        with pytest.raises(ValidationError):
+            RunnerSolutionCreate(question_id=uuid4(), test_cases=[case])
