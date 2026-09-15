@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Ruff + ty
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.14"
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run ty check .
+
+  test:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.14"
+      - run: uv sync --frozen
+      - run: uv run pytest
+
+  live:
+    name: pytest -m live (microVM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.0
+      # /dev/kvm ships as root:kvm 0660 and the runner user is not in that group,
+      # so without this every live test skips itself and the job goes green.
+      # chmod rather than a udev rule: these images do not all run systemd-udevd.
+      - name: Grant access to /dev/kvm
+        run: |
+          ls -l /dev/kvm || echo "no /dev/kvm on this runner"
+          grep -cE 'vmx|svm' /proc/cpuinfo || echo "no CPU virt flags"
+          sudo chmod 0666 /dev/kvm || true
+          ls -l /dev/kvm || true
+          test -r /dev/kvm && test -w /dev/kvm
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.14"
+      - run: uv sync --frozen
+      - run: uv run pytest -m live -rs
