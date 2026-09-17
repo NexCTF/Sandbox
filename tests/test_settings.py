@@ -1,10 +1,4 @@
-"""Tests for the admin-tunable microVM settings.
-
-This suite runs outside the host app, so ``_settings`` cannot reach the host's
-config and falls back to the defaults. That is not just an edge case here: it is
-the path every other test in this repo implicitly boots on, so it is covered
-first.
-"""
+"""Tests for the admin-tunable microVM settings."""
 
 from __future__ import annotations
 
@@ -113,6 +107,81 @@ async def test_base_image_is_applied(monkeypatch, boot_kwargs) -> None:
     await _sandbox.run_python("print('hi')", timeout=5)
 
     assert "python:3.13-slim" in repr(boot_kwargs["image"])
+
+
+async def test_the_vm_has_no_egress_by_default(monkeypatch, boot_kwargs) -> None:
+    """Submitted code is untrusted, so the network is off until an admin opens it."""
+    monkeypatch.setattr(_sandbox, "_settings", _settings_returning())
+
+    await _sandbox.run_python("print('hi')", timeout=5)
+
+    assert boot_kwargs["network"] == _sandbox.Network.none()
+
+
+async def test_internet_access_reaches_the_public_internet_only(
+    monkeypatch, boot_kwargs
+) -> None:
+    """'internet' must not hand submitted code the host's own network: Redis and
+    the Postgres holding the flags sit on it. Only ``public`` (plus DNS) is
+    granted — that is what separates it from 'all'."""
+    monkeypatch.setattr(
+        _sandbox,
+        "_settings",
+        _settings_returning(network_access=_sandbox.NETWORK_INTERNET),
+    )
+
+    await _sandbox.run_python("print('hi')", timeout=5)
+
+    policy = boot_kwargs["network"]._to_dict()["custom_policy"]
+    assert policy["default_egress"] == "deny"  # 'all' would make this "allow"
+    # The DNS rules are pinned to port 53 on the host; the rest is the real grant.
+    granted = {r["destination"] for r in policy["rules"] if r.get("port") != "53"}
+    assert granted == {"public"}
+
+
+async def test_all_access_is_unfiltered(monkeypatch, boot_kwargs) -> None:
+    """The escape hatch, for an admin who wants the guest on the host's network."""
+    monkeypatch.setattr(
+        _sandbox, "_settings", _settings_returning(network_access=_sandbox.NETWORK_ALL)
+    )
+
+    await _sandbox.run_python("print('hi')", timeout=5)
+
+    assert boot_kwargs["network"] == _sandbox.Network.allow_all()
+
+
+def test_every_choice_maps_to_a_policy() -> None:
+    """The ConfigDef offers these three, so each has to resolve to its own policy —
+    a value with no branch would fall through to the deny default silently."""
+    policies = [_sandbox._network(a) for a in _sandbox.NETWORK_ACCESS_CHOICES]
+
+    # Network holds a dict, so it is unhashable — compare on the repr instead.
+    assert len({repr(p) for p in policies}) == len(_sandbox.NETWORK_ACCESS_CHOICES)
+    assert _sandbox._network(_sandbox.NETWORK_DISABLED) == _sandbox.Network.none()
+
+
+def test_an_unknown_access_value_denies_rather_than_widens(monkeypatch) -> None:
+    """Not reachable through an override, but if _DEFAULTS and the ConfigDef ever
+    drift apart they must drift closed: denied when the host can filter, refused
+    outright when it cannot."""
+    assert _sandbox._network("everything") == _sandbox.Network.none()
+
+    monkeypatch.setattr(_sandbox, "_can_enforce_network", lambda: False)
+    with pytest.raises(RuntimeError, match="CAP_NET_ADMIN"):
+        _sandbox._check_enforceable("everything", _sandbox._network("everything"))
+
+
+def test_a_bad_override_never_reaches_the_policy(monkeypatch) -> None:
+    """The guard the branch above backs up: the host rejects a non-choice override
+    and hands back the code default instead of the raw string."""
+    from nexctf.plugins import get_plugin_config
+
+    key = f"{_sandbox.PLUGIN_SLUG}.network_access"
+    resolved = get_plugin_config(
+        "network_access", {key: "yes-please"}, plugin_slug=_sandbox.PLUGIN_SLUG
+    )
+
+    assert resolved == _sandbox.DEFAULT_NETWORK_ACCESS
 
 
 def test_max_concurrent_sizes_the_semaphore(monkeypatch) -> None:
@@ -246,3 +315,79 @@ def test_base_image_is_registered_as_a_plain_string() -> None:
     assert (
         appconfig._DEFS[f"{_sandbox.PLUGIN_SLUG}.base_image"].type is ConfigType.STRING
     )
+
+
+async def test_a_host_that_cannot_filter_refuses_to_run_isolated_code(
+    monkeypatch, boot_kwargs
+) -> None:
+    """Without CAP_NET_ADMIN microsandbox reports the policy as applied and leaves
+    egress wide open — so fail closed rather than run untrusted code with real
+    network while the admin UI says 'disabled'."""
+    monkeypatch.setattr(_sandbox, "_can_enforce_network", lambda: False)
+
+    for access in (_sandbox.NETWORK_DISABLED, _sandbox.NETWORK_INTERNET):
+        monkeypatch.setattr(
+            _sandbox, "_settings", _settings_returning(network_access=access)
+        )
+        with pytest.raises(RuntimeError, match="CAP_NET_ADMIN"):
+            await _sandbox.run_python("print('hi')", timeout=5)
+
+    assert boot_kwargs == {}  # refused before the VM was ever created
+
+
+async def test_a_host_that_cannot_filter_still_runs_unfiltered_code(
+    monkeypatch, boot_kwargs
+) -> None:
+    """'all' asks for no filtering, so a host that cannot filter delivers exactly
+    what was asked for. Refusing it would be a gate with nothing behind it."""
+    monkeypatch.setattr(_sandbox, "_can_enforce_network", lambda: False)
+    monkeypatch.setattr(
+        _sandbox, "_settings", _settings_returning(network_access=_sandbox.NETWORK_ALL)
+    )
+
+    await _sandbox.run_python("print('hi')", timeout=5)
+
+    assert boot_kwargs["network"] == _sandbox.Network.allow_all()
+
+
+@pytest.mark.real_capability_probe
+def test_the_capability_probe_ignores_a_remote_backend(monkeypatch) -> None:
+    """With the cloud backend the microVM runs on another host, so this process's
+    capabilities say nothing about whether its egress is filtered."""
+    from microsandbox.types import BackendKind
+
+    monkeypatch.setattr(_sandbox, "default_backend_kind", lambda: BackendKind.CLOUD)
+
+    assert _sandbox._can_enforce_network() is True
+
+
+@pytest.mark.real_capability_probe
+def test_an_unreadable_capability_probe_does_not_block_every_submission(
+    monkeypatch,
+) -> None:
+    """A definite 'no CAP_NET_ADMIN' is evidence; a /proc that will not parse is not.
+    Failing closed on a broken probe would take the platform down over nothing."""
+    from microsandbox.types import BackendKind
+
+    # Pin the backend, or on a host defaulting to the cloud backend this returns
+    # True at the first branch and never reaches the parse it claims to cover.
+    monkeypatch.setattr(_sandbox, "default_backend_kind", lambda: BackendKind.LOCAL)
+    monkeypatch.setattr(
+        _sandbox.Path, "read_text", lambda self, *a, **k: "nothing useful here"
+    )
+
+    assert _sandbox._can_enforce_network() is True
+
+
+@pytest.mark.real_capability_probe
+def test_the_probe_is_not_cached_across_a_privilege_change(monkeypatch) -> None:
+    """A cached answer would survive a process dropping CAP_NET_ADMIN after startup,
+    leaving the gate passing while egress was no longer filtered."""
+    from microsandbox.types import BackendKind
+
+    monkeypatch.setattr(_sandbox, "default_backend_kind", lambda: BackendKind.LOCAL)
+    caps = ["CapEff:\t0000000000001000\n", "CapEff:\t0000000000000000\n"]
+    monkeypatch.setattr(_sandbox.Path, "read_text", lambda self, *a, **k: caps.pop(0))
+
+    assert _sandbox._can_enforce_network() is True  # holds CAP_NET_ADMIN (bit 12)
+    assert _sandbox._can_enforce_network() is False  # dropped it; probe sees it

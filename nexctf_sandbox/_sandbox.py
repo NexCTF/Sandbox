@@ -6,9 +6,18 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from functools import partial
+from pathlib import Path
 from uuid import uuid4
 
-from microsandbox import Image, Network, RootDisk, Sandbox
+from microsandbox import (
+    BackendKind,
+    Image,
+    Network,
+    NetworkProfile,
+    RootDisk,
+    Sandbox,
+    default_backend_kind,
+)
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -21,36 +30,36 @@ DEFAULT_MEMORY_MIB = 256
 DEFAULT_ROOT_DISK_MIB = 64
 DEFAULT_MAX_CONCURRENT = 8
 
-# What the host's config resolver hands back for any one key.
+NETWORK_DISABLED = "disabled"  # no egress at all
+NETWORK_INTERNET = "internet"  # public addresses and DNS, but nothing host-side
+NETWORK_ALL = "all"  # unfiltered, including the host's own network
+NETWORK_ACCESS_CHOICES = [NETWORK_DISABLED, NETWORK_INTERNET, NETWORK_ALL]
+DEFAULT_NETWORK_ACCESS = NETWORK_DISABLED
+
 type ConfigValue = str | int | float | bool
 
-# The admin-tunable settings, and what to fall back to when the host's config
-# is out of reach. Keys are bare — register_plugin_configs() prefixes them.
 _DEFAULTS: dict[str, ConfigValue] = {
     "base_image": DEFAULT_BASE_IMAGE,
     "cpus": DEFAULT_CPUS,
     "memory_mib": DEFAULT_MEMORY_MIB,
     "root_disk_mib": DEFAULT_ROOT_DISK_MIB,
     "max_concurrent": DEFAULT_MAX_CONCURRENT,
+    "network_access": DEFAULT_NETWORK_ACCESS,
 }
 
+_CAP_NET_ADMIN = 12
 _MAX_OUTPUT_BYTES = 64 * 1024
 _RUN = (
     f"python3 /code.py >/out 2>/err; rc=$?; "
     f"head -c {_MAX_OUTPUT_BYTES} /out; head -c {_MAX_OUTPUT_BYTES} /err >&2; exit $rc"
 )
-
-MAX_PAYLOAD_CHARS = _MAX_OUTPUT_BYTES
-MIN_TIMEOUT = 1  # 0 times out at 0ns, making every answer silently wrong
-MAX_TIMEOUT = 30
-
-# Built on first use, from max_concurrent — a Semaphore cannot be resized, so
-# changing that setting only takes effect on restart.
 _SLOTS: asyncio.Semaphore | None = None
 
-# Latched once the host app turns out not to be importable (running outside it,
-# e.g. under the plugin's own test suite). A failed import is not cached in
-# sys.modules, so without this every boot would retry and re-pay for it.
+MAX_PAYLOAD_CHARS = _MAX_OUTPUT_BYTES
+MIN_TIMEOUT = 1
+MAX_TIMEOUT = 30
+
+
 _no_host = False
 
 
@@ -63,12 +72,7 @@ def _slots(limit: int) -> asyncio.Semaphore:
 
 
 async def _settings() -> dict[str, ConfigValue]:
-    """Resolve the admin-set VM settings, falling back to ``_DEFAULTS``.
-
-    Read fresh per submission rather than cached: one Redis ``hgetall`` against
-    a ~1.1s VM boot is free, and it lets a changed setting apply immediately.
-    Never raises — booting on defaults beats not booting at all.
-    """
+    """Resolve the admin-set VM settings, falling back to ``_DEFAULTS``."""
     global _no_host
     if _no_host:
         return dict(_DEFAULTS)
@@ -77,15 +81,10 @@ async def _settings() -> dict[str, ConfigValue]:
         from nexctf.core.cache import get_client
         from nexctf.plugins import get_plugin_config
     except ImportError, ValidationError:
-        # No host app, or its settings cannot be built from the environment.
-        # Deterministic, so latch. Expected when the plugin runs on its own
-        # (its test suite), which is why this is debug and not a warning.
         logger.debug("sandbox.config host unavailable; using defaults", exc_info=True)
         _no_host = True
         return dict(_DEFAULTS)
     except Exception:
-        # Anything else is not evidence the host is absent. Latching here would
-        # pin every setting to its default until the next restart.
         logger.warning(
             "sandbox.config host import failed; using defaults", exc_info=True
         )
@@ -94,7 +93,6 @@ async def _settings() -> dict[str, ConfigValue]:
     try:
         overrides = await appconfig.fetch_overrides(get_client())
     except Exception:
-        # Transient — Redis down, say. Not latched, so the next boot retries.
         logger.warning("sandbox.config fetch failed; using defaults", exc_info=True)
         return dict(_DEFAULTS)
 
@@ -103,9 +101,6 @@ async def _settings() -> dict[str, ConfigValue]:
         try:
             resolved[key] = get_plugin_config(key, overrides, plugin_slug=PLUGIN_SLUG)
         except Exception:
-            # In practice a key we never registered. An override that will not
-            # cast does not reach here: since 0.10 the host validates it, warns
-            # once and hands back the code default itself.
             logger.warning(
                 "sandbox.config bad key=%s; using default", key, exc_info=True
             )
@@ -113,22 +108,75 @@ async def _settings() -> dict[str, ConfigValue]:
     return resolved
 
 
+def _can_enforce_network() -> bool:
+    """Whether a network policy set on a microVM is actually programmed.
+
+    Without CAP_NET_ADMIN microsandbox reports the policy as applied and leaves
+    egress unfiltered.
+    """
+    try:
+        if default_backend_kind() != BackendKind.LOCAL:
+            return True
+        status = Path("/proc/self/status").read_text()
+        caps = int(status.split("CapEff:")[1].split()[0], 16)
+    except Exception:
+        logger.warning(
+            "sandbox.network capability probe failed; assuming policy is enforced",
+            exc_info=True,
+        )
+        return True
+    return bool(caps >> _CAP_NET_ADMIN & 1)
+
+
+def _network(access: ConfigValue) -> Network:
+    """Build the guest's egress policy from the ``network_access`` setting."""
+    if access == NETWORK_INTERNET:
+        return Network.from_profiles(NetworkProfile.PUBLIC)
+    if access == NETWORK_ALL:
+        return Network.allow_all()
+    if access != NETWORK_DISABLED:
+        logger.warning("sandbox.network unknown access=%r; denying egress", access)
+    return Network.none()
+
+
+def _check_enforceable(access: ConfigValue, network: Network) -> None:
+    """Refuse to boot when *network* would silently not be applied."""
+    if network != Network.allow_all() and not _can_enforce_network():
+        raise RuntimeError(
+            f"network_access={access!r} cannot be enforced: this process has no "
+            "CAP_NET_ADMIN, so microsandbox would leave guest egress unfiltered. "
+            "Grant the capability, or set network_access="
+            f"{NETWORK_ALL!r} to accept unfiltered egress."
+        )
+
+
+if not _can_enforce_network():
+    logger.warning(
+        "sandbox.network host has no CAP_NET_ADMIN: microVM egress cannot be "
+        "filtered, so network_access=%r and %r are refused and only %r will boot",
+        NETWORK_DISABLED,
+        NETWORK_INTERNET,
+        NETWORK_ALL,
+    )
+
+
 @asynccontextmanager
 async def _ephemeral(cfg: dict[str, ConfigValue]):
+    access = cfg["network_access"]
+    network = _network(access)
+    _check_enforceable(access, network)
     root_disk_mib = int(cfg["root_disk_mib"])
     name = f"nexctf-{uuid4().hex}"
     sb = None
     try:
         sb = await Sandbox.create(
             name,
-            # tmpfs root disk: guest writes are RAM-backed, so they cost no host disk.
             image=Image.oci(
                 str(cfg["base_image"]), root_disk=RootDisk.tmpfs(root_disk_mib)
             ),
             cpus=int(cfg["cpus"]),
-            # the tmpfs root disk is charged to guest memory
             memory=int(cfg["memory_mib"]) + root_disk_mib,
-            network=Network.none(),
+            network=network,
         )
         yield sb
     finally:
@@ -138,7 +186,6 @@ async def _ephemeral(cfg: dict[str, ConfigValue]):
             except Exception:
                 logger.warning("sandbox.kill failed name=%s", name, exc_info=True)
         try:
-            # kill() only stops the VM; without remove() it and its disk survive forever.
             await Sandbox.remove(name)
         except Exception:
             logger.warning("sandbox.remove failed name=%s", name, exc_info=True)
@@ -153,7 +200,6 @@ async def _exec(sb, code: str, stdin: str = "", *, timeout: int) -> tuple[int, s
         stdin=stdin.encode() if stdin else None,
         timeout=float(timeout),
     )
-    # Sizes only, at every level: a checker that raises prints the flag onto stderr.
     out = result.stdout_text
     logger.info(
         "sandbox.run exit_code=%d out=%dB err=%dB",

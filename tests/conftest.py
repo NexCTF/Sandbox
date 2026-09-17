@@ -1,9 +1,4 @@
-"""Shared fixtures for the nexctf_sandbox tests.
-
-Importing :mod:`nexctf_sandbox` registers the ``runner`` and ``script`` solution
-types. The microVM call (``run_python``) is patched per test so the suite runs
-without KVM or a network.
-"""
+"""Shared fixtures for the nexctf_sandbox tests."""
 
 from __future__ import annotations
 
@@ -13,6 +8,17 @@ from contextlib import asynccontextmanager
 import pytest
 
 import nexctf_sandbox  # noqa: F401 — import for side effect: registers solution types
+from nexctf_sandbox import _sandbox
+
+
+@pytest.fixture(autouse=True)
+def _assume_the_host_can_filter(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pretend this process holds CAP_NET_ADMIN, unless a test says otherwise."""
+    if request.node.get_closest_marker("real_capability_probe"):
+        return
+    monkeypatch.setattr(_sandbox, "_can_enforce_network", lambda: True)
 
 
 def _returns(exit_code: int, stdout: str = "") -> Callable:

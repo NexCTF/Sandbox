@@ -8,11 +8,6 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "microsandbox>=0.6.14",
-    # 0.10 is the floor, not a preference: its loader is the one that reads
-    # migrations from <package>/alembic/versions and derives the plugin's name
-    # and owned tables from the distribution. Older loaders look for alembic/ at
-    # the plugin root and read [tool.nexctf.migrations], so this plugin installs
-    # cleanly on them and then never runs its migrations.
     "nexctf>=0.10,<1.0",
 ]
 
@@ -32,7 +27,6 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "ruff>=0.15.18",
     "ty>=0.0.51",
-    # Host app isn't on PyPI; pinned to the released tag.
     "nexctf @ git+https://github.com/NexCTF/NexCTF.git@v0.10.0#subdirectory=backend",
 ]
 
@@ -42,5 +36,8 @@ nexctf_sandbox = "nexctf_sandbox"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-markers = ["live: boots a real microVM, needs /dev/kvm"]
+markers = [
+    "live: boots a real microVM, needs /dev/kvm",
+    "real_capability_probe: runs the real CAP_NET_ADMIN probe, not the test stand-in",
+]
 addopts = "-m 'not live'"  # opt in with: pytest -m live

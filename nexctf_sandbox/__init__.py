@@ -11,7 +11,9 @@ from nexctf_sandbox._sandbox import (
     DEFAULT_CPUS,
     DEFAULT_MAX_CONCURRENT,
     DEFAULT_MEMORY_MIB,
+    DEFAULT_NETWORK_ACCESS,
     DEFAULT_ROOT_DISK_MIB,
+    NETWORK_ACCESS_CHOICES,
     PLUGIN_SLUG,
 )
 from nexctf_sandbox.solutions.runner import (
@@ -73,6 +75,18 @@ register_plugin_configs(
         label="Root disk (MiB)",
         default=DEFAULT_ROOT_DISK_MIB,
         description="Size of the tmpfs root disk. It is RAM-backed, so it is charged to guest memory.",
+    ),
+    ConfigDef(
+        key="network_access",
+        label="Network access",
+        default=DEFAULT_NETWORK_ACCESS,
+        type=ConfigType.CHOICE,
+        choices=NETWORK_ACCESS_CHOICES,
+        description=(
+            "'disabled': no egress at all.\n"
+            "'internet': public addresses, plus the host's DNS resolver on port 53.\n"
+            "'all': unfiltered, including everything on the host's own network."
+        ),
     ),
     ConfigDef(
         key="max_concurrent",
