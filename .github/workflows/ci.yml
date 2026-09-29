@@ -18,7 +18,7 @@ jobs:
     name: Ruff + ty
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.14"
@@ -31,7 +31,7 @@ jobs:
     name: pytest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.14"
@@ -42,7 +42,7 @@ jobs:
     name: pytest -m live (microVM)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@v7.0.1
       # /dev/kvm ships as root:kvm 0660 and the runner user is not in that group,
       # so without this every live test skips itself and the job goes green.
       # chmod rather than a udev rule: these images do not all run systemd-udevd.
