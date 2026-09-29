@@ -99,7 +99,7 @@ async def _settings() -> dict[str, ConfigValue]:
     resolved: dict[str, ConfigValue] = {}
     for key, fallback in _DEFAULTS.items():
         try:
-            resolved[key] = get_plugin_config(key, overrides, plugin_slug=PLUGIN_SLUG)
+            resolved[key] = get_plugin_config(key, overrides, plugin_key=PLUGIN_SLUG)
         except Exception:
             logger.warning(
                 "sandbox.config bad key=%s; using default", key, exc_info=True

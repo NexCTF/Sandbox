@@ -400,6 +400,18 @@ wheels = [
 ]
 
 [[package]]
+name = "croniter"
+version = "6.2.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/37/57/2e2a65aee2a70483cb28e2b7e15a072d00a523207593b44400d4717bb100/croniter-6.2.4.tar.gz", hash = "sha256:fc124f751b1b04805c2a04b061898b436b45ab2320b045e1e052ea895de65189", size = 166267, upload-time = "2026-07-10T09:52:59.955Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cd/ba/d678e5bd329646ca51d3c92addbc77804e86d21f4b6b6a027218e6abb010/croniter-6.2.4-py3-none-any.whl", hash = "sha256:8ef3d544107a5c05a150a2d78f8bf5a8eb9c5c4d93405a736b824109574e3f4d", size = 46677, upload-time = "2026-07-10T09:52:58.425Z" },
+]
+
+[[package]]
 name = "cronsim"
 version = "2.7"
 source = { registry = "https://pypi.org/simple" }
@@ -487,7 +499,7 @@ standard-no-fastapi-cloud-cli = [
 
 [[package]]
 name = "fastapi-multiauth"
-version = "0.4.1"
+version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -496,9 +508,9 @@ dependencies = [
     { name = "httpx" },
     { name = "itsdangerous" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c7/32/7e9850df8878fe91f70e0cad59af6b7486f4a9ddfa830147d95096346949/fastapi_multiauth-0.4.1.tar.gz", hash = "sha256:3570c0fd17087aea0cbb23b0a2b5d6f755eaad87a58d1467d32d42ad3ba30ea1", size = 23653, upload-time = "2026-08-20T10:32:42.295Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/3e/6c58728b1cd5efca1b50c20d37428d17dbbbdc4dd39b193bab0495e3f1e7/fastapi_multiauth-0.6.0.tar.gz", hash = "sha256:8298a1ef8fb76f0e03661419e9065aa9faea16241e35db17f5cae31ccb7482bd", size = 28932, upload-time = "2026-09-21T20:14:25.439Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ad/fe/f73c553a4bcf7a03588bb10ed83d400cc34e5e1583a5b41a6113ed6ea9e9/fastapi_multiauth-0.4.1-py3-none-any.whl", hash = "sha256:8a7489eb6cd29b5978ca1e9e290947f31c36a1c57e766d64b8a585fe0600ce11", size = 32880, upload-time = "2026-08-20T10:32:41.164Z" },
+    { url = "https://files.pythonhosted.org/packages/53/1c/ffb3678592de9f3eb47bdd51f03e262c63f8ad6985915772b84f9371eb02/fastapi_multiauth-0.6.0-py3-none-any.whl", hash = "sha256:585ca6b63c1fcf65cb0c78038ceda07f9351d8e6b66946f9c110d364d894c703", size = 39104, upload-time = "2026-09-21T20:14:24.202Z" },
 ]
 
 [package.optional-dependencies]
@@ -508,7 +520,7 @@ oauth = [
 
 [[package]]
 name = "fastapi-toolsets"
-version = "5.1.0"
+version = "5.1.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asyncpg" },
@@ -516,9 +528,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/86/53/643cb12d55c4f940f54bae5d08297c380599d013bfea13ebf2723611ea5f/fastapi_toolsets-5.1.0.tar.gz", hash = "sha256:362658a8eeca90fe99b4dcd88e0d2d139ad52a0636ab8751101672bccd54736a", size = 54331, upload-time = "2026-07-28T12:24:44.763Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/32/74/6d32352fdd9b695c7187cf401a6a07c9a5c12686a4472bd41643452f33bf/fastapi_toolsets-5.1.4.tar.gz", hash = "sha256:dd9c48067919377225c9e7eeaa173de335d940c4adfb5148364caad75a686adb", size = 58366, upload-time = "2026-09-22T18:46:21.071Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f8/9f/e2d002dc8a1c059f7cc4268ac7aa75c1f28062aed4136de94e6a04801d46/fastapi_toolsets-5.1.0-py3-none-any.whl", hash = "sha256:00f0a71d84c8fa12f6403b19c018eb839d0d8a6525fed78d631a5be9bb7b6fa8", size = 70325, upload-time = "2026-07-28T12:24:43.238Z" },
+    { url = "https://files.pythonhosted.org/packages/43/f0/c2ec2406a80f53e9bf9bf5688308e036b38c07a51031c6bffda205bf4e8c/fastapi_toolsets-5.1.4-py3-none-any.whl", hash = "sha256:9ff0f638f522de4980ca75713378a99790226d32210ec6381b9a16e167896d43", size = 74145, upload-time = "2026-09-22T18:46:19.855Z" },
 ]
 
 [package.optional-dependencies]
@@ -859,21 +871,24 @@ wheels = [
 
 [[package]]
 name = "nexctf"
-version = "0.10.0"
-source = { git = "https://github.com/NexCTF/NexCTF.git?subdirectory=backend&rev=v0.10.0#bddae34a011c0bab81f08610b9fd36e72c770650" }
+version = "0.11.0"
+source = { git = "https://github.com/NexCTF/NexCTF.git?subdirectory=backend&rev=v0.11.0#d739250c7ef402298ef597465a42fa5f0226a3db" }
 dependencies = [
     { name = "aioboto3" },
     { name = "aiosmtplib" },
     { name = "alembic" },
     { name = "altcha" },
     { name = "argon2-cffi" },
+    { name = "asyncpg" },
     { name = "cronsim" },
     { name = "fastapi", extra = ["standard-no-fastapi-cloud-cli"] },
     { name = "fastapi-multiauth", extra = ["oauth"] },
     { name = "fastapi-toolsets", extra = ["all"] },
+    { name = "pgqueuer" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyotp" },
+    { name = "pyyaml" },
     { name = "redis" },
     { name = "regex" },
     { name = "sqlalchemy", extra = ["asyncio"] },
@@ -900,12 +915,12 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "microsandbox", specifier = ">=0.6.14" },
-    { name = "nexctf", specifier = ">=0.10,<1.0" },
+    { name = "nexctf", specifier = ">=0.11,<1.0" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "nexctf", git = "https://github.com/NexCTF/NexCTF.git?subdirectory=backend&rev=v0.10.0" },
+    { name = "nexctf", git = "https://github.com/NexCTF/NexCTF.git?subdirectory=backend&rev=v0.11.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "ruff", specifier = ">=0.15.18" },
@@ -919,6 +934,24 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d7/f1/e7a6dd94a8d4a5626c03e4e99c87f241ba9e350cd9e6d75123f992427270/packaging-26.2.tar.gz", hash = "sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661", size = 228134, upload-time = "2026-04-24T20:15:23.917Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/df/b2/87e62e8c3e2f4b32e5fe99e0b86d576da1312593b39f47d8ceef365e95ed/packaging-26.2-py3-none-any.whl", hash = "sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e", size = 100195, upload-time = "2026-04-24T20:15:22.081Z" },
+]
+
+[[package]]
+name = "pgqueuer"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "croniter" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "tabulate" },
+    { name = "typer" },
+    { name = "uvloop", marker = "sys_platform != 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/56/0f/b40f336d39a8ad2bb509964fbaa311a19a82cbb8ea4f429694f212bb05ef/pgqueuer-1.4.0.tar.gz", hash = "sha256:0cc94d36933c6d4487ac337c3a81765c18b694602b297dda8c48bc0e3632c5cd", size = 556181, upload-time = "2026-09-14T14:29:15.754Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/db/67/c027a622518e990ec4dbd6cb4a70a986d22307cdff6dd498b18cfdaadcc3/pgqueuer-1.4.0-py3-none-any.whl", hash = "sha256:8cb10ff75ce36add811f24c540d0bafb1d6d985e393b124a4d6434c33570b586", size = 154026, upload-time = "2026-09-14T14:29:14.217Z" },
 ]
 
 [[package]]
@@ -1356,6 +1389,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/eb/e3/7c1dc7381d9f8ab7d854328ebfa884e62cb3f3d8549ddfd37c7814f42afa/starlette-1.3.1.tar.gz", hash = "sha256:05d0213193f2fbaae60e2ecb593b4add4262ad4e46536b54abe36f11a71724e0", size = 2703240, upload-time = "2026-06-12T09:23:11.602Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/bb/2799cc2ede3ed41131f8975621e7213dfc7ef4acbbaadfa440f32500c370/starlette-1.3.1-py3-none-any.whl", hash = "sha256:c7372aae11c3c3f26a42df7bd626cec2f47d03483d261d369516a615a53714c6", size = 73632, upload-time = "2026-06-12T09:23:10.017Z" },
+]
+
+[[package]]
+name = "tabulate"
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/46/58/8c37dea7bbf769b20d58e7ace7e5edfe65b849442b00ffcdd56be88697c6/tabulate-0.10.0.tar.gz", hash = "sha256:e2cfde8f79420f6deeffdeda9aaec3b6bc5abce947655d17ac662b126e48a60d", size = 91754, upload-time = "2026-03-04T18:55:34.402Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/55/db07de81b5c630da5cbf5c7df646580ca26dfaefa593667fc6f2fe016d2e/tabulate-0.10.0-py3-none-any.whl", hash = "sha256:f0b0622e567335c8fabaaa659f1b33bcb6ddfe2e496071b743aa113f8774f2d3", size = 39814, upload-time = "2026-03-04T18:55:31.284Z" },
 ]
 
 [[package]]

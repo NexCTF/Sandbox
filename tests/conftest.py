@@ -6,9 +6,12 @@ from collections.abc import Callable
 from contextlib import asynccontextmanager
 
 import pytest
+from nexctf.plugins.testing import register_plugin
 
-import nexctf_sandbox  # noqa: F401 — import for side effect: registers solution types
+import nexctf_sandbox
 from nexctf_sandbox import _sandbox
+
+register_plugin(nexctf_sandbox.plugin, _sandbox.PLUGIN_SLUG)
 
 
 @pytest.fixture(autouse=True)

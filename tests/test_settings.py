@@ -7,7 +7,6 @@ from types import SimpleNamespace
 
 import pytest
 
-import nexctf_sandbox  # noqa: F401 — import for side effect: registers the config defs
 from nexctf_sandbox import _sandbox
 
 
@@ -178,7 +177,7 @@ def test_a_bad_override_never_reaches_the_policy(monkeypatch) -> None:
 
     key = f"{_sandbox.PLUGIN_SLUG}.network_access"
     resolved = get_plugin_config(
-        "network_access", {key: "yes-please"}, plugin_slug=_sandbox.PLUGIN_SLUG
+        "network_access", {key: "yes-please"}, plugin_key=_sandbox.PLUGIN_SLUG
     )
 
     assert resolved == _sandbox.DEFAULT_NETWORK_ACCESS
@@ -211,7 +210,7 @@ async def test_a_bad_key_falls_back_to_that_key_alone(monkeypatch) -> None:
     """One unusable key must not take the other settings down with it."""
     monkeypatch.setattr(_sandbox, "_no_host", False)
 
-    def _get(key, overrides, *, plugin_slug=None):
+    def _get(key, overrides, *, plugin_key=None):
         if key == "cpus":
             raise KeyError(key)  # never registered, or an override that will not cast
         return 999 if key == "memory_mib" else _sandbox._DEFAULTS[key]
@@ -251,7 +250,7 @@ def _install_fake_host(monkeypatch, *, fetch_overrides=None, get_plugin_config=N
         "nexctf.plugins",
         SimpleNamespace(
             get_plugin_config=get_plugin_config
-            or (lambda key, o, *, plugin_slug=None: _sandbox._DEFAULTS[key])
+            or (lambda key, o, *, plugin_key=None: _sandbox._DEFAULTS[key])
         ),
     )
 

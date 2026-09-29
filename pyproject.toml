@@ -8,7 +8,7 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "microsandbox>=0.6.14",
-    "nexctf>=0.10,<1.0",
+    "nexctf>=0.11,<1.0",
 ]
 
 [project.urls]
@@ -27,7 +27,7 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "ruff>=0.15.18",
     "ty>=0.0.51",
-    "nexctf @ git+https://github.com/NexCTF/NexCTF.git@v0.10.0#subdirectory=backend",
+    "nexctf @ git+https://github.com/NexCTF/NexCTF.git@v0.11.0#subdirectory=backend",
 ]
 
 [project.entry-points."nexctf.plugins"]
