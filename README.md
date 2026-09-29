@@ -15,21 +15,17 @@ Add the plugin to NexCTF's `NEXCTF_PLUGINS` and restart it; NexCTF installs it a
 NEXCTF_PLUGINS=git+https://github.com/NexCTF/Sandbox.git
 ```
 
-The NexCTF process that checks submissions boots the microVMs, so its host needs:
+The NexCTF process that checks submissions boots the microVMs, so it needs read and write access to `/dev/kvm`. Nothing else: the network setting is enforced by microsandbox's own network stack, with no extra capability or root.
 
-1. **KVM**: read and write access to `/dev/kvm`.
-2. **`CAP_NET_ADMIN`**: to filter the microVMs' network. Without it, only a network access of `all` boots; `disabled` and `internet` are refused rather than silently left open.
-
-With NexCTF's `compose.yml`, both go on the `app` service, e.g. in a `compose.override.yml`. The image runs as an unprivileged user, whose processes never hold an added capability, so the service runs as root:
+With NexCTF's `compose.yml`, that goes on the `app` service, e.g. in a `compose.override.yml`. `/dev/kvm` belongs to the host's `kvm` group, which the image's unprivileged user has to join; get its id with `stat -c %g /dev/kvm`:
 
 ```yaml
 services:
   app:
-    user: root
     devices:
       - /dev/kvm
-    cap_add:
-      - NET_ADMIN
+    group_add:
+      - "993"  # the kvm group id on the host
     environment:
       NEXCTF_PLUGINS: git+https://github.com/NexCTF/Sandbox.git
 ```
@@ -91,7 +87,7 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check . && uv run ty check .
 ```
 
-The `live` tests boot real microVMs and skip without `/dev/kvm`; the network ones also skip without `CAP_NET_ADMIN` or internet access:
+The `live` tests boot real microVMs and skip without `/dev/kvm`; the one reaching the internet also skips when the host has none. Run them on the host that will check submissions before an event:
 
 ```bash
 uv run pytest -m live

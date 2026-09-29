@@ -38,6 +38,5 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "live: boots a real microVM, needs /dev/kvm",
-    "real_capability_probe: runs the real CAP_NET_ADMIN probe, not the test stand-in",
 ]
 addopts = "-m 'not live'"  # opt in with: pytest -m live

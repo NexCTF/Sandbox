@@ -71,19 +71,9 @@ async def test_sandbox_is_deregistered_after_the_run() -> None:
     assert await _nexctf_sandboxes() == []
 
 
-@pytest.fixture(autouse=True)
-def _ask_for_what_this_host_can_deliver(monkeypatch: pytest.MonkeyPatch) -> None:
-    """On a host without CAP_NET_ADMIN, run the suite under 'all'.
-
-    ``_check_enforceable`` refuses the isolating settings there, failing every
-    test here for a reason none of them is about. Not a workaround: on a host
-    that cannot filter, unfiltered egress is exactly what the guest gets.
-    """
-    if not _host_can_filter():
-        monkeypatch.setattr(
-            _sandbox, "_settings", _settings_with(network_access=_sandbox.NETWORK_ALL)
-        )
-
+# Never probe port 53: microsandbox answers DNS itself, so a TCP connect there
+# succeeds under every policy, even Network.none(), and proves nothing about egress.
+_PUBLIC = ("1.1.1.1", 443)
 
 _REACH = (
     "import socket\n"
@@ -113,7 +103,7 @@ def _require_host_internet() -> None:
     every test in it — opening a socket on every run of the fast suite.
     """
     try:
-        socket.create_connection(("1.1.1.1", 53), timeout=3).close()
+        socket.create_connection(_PUBLIC, timeout=3).close()
     except OSError:
         pytest.skip(
             "host itself has no outbound network, so the guest cannot reach "
@@ -121,31 +111,26 @@ def _require_host_internet() -> None:
         )
 
 
-def _host_can_filter() -> bool:
-    """CAP_NET_ADMIN, without which microsandbox cannot program any firewall rules."""
-    status = Path("/proc/self/status").read_text()
-    caps = int(status.split("CapEff:")[1].split()[0], 16)
-    return bool(caps >> 12 & 1)
+@pytest.fixture
+def host_listener():
+    """A TCP listener on the host's own address, as the guest would dial it."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        probe.connect(_PUBLIC)  # picks the outbound interface; sends nothing
+        host_ip = probe.getsockname()[0]
+    with socket.socket() as listener:
+        listener.bind((host_ip, 0))
+        listener.listen()
+        yield listener.getsockname()
 
 
-@pytest.mark.skipif(
-    not _host_can_filter(),
-    reason="host has no CAP_NET_ADMIN, so sandbox egress is UNFILTERED here — "
-    "microsandbox reports default_egress=DENY and lets the guest reach anything",
-)
 async def test_network_is_denied() -> None:
-    """With ``network_access`` on its default the guest gets Network.none(), which
-    fails open silently: on a host that cannot program firewall rules the policy is
-    simply not applied — which is why _check_enforceable refuses to boot there."""
-    exit_code, stdout = await run_python(_REACH % ("1.1.1.1", 53), timeout=20)
+    """With ``network_access`` on its default the guest gets Network.none(), and
+    microsandbox enforces it without any host capability."""
+    exit_code, stdout = await run_python(_REACH % _PUBLIC, timeout=20)
 
     assert (exit_code, stdout.strip()) == (0, "denied")
 
 
-@pytest.mark.skipif(
-    not _host_can_filter(),
-    reason="host has no CAP_NET_ADMIN, so _check_enforceable refuses 'internet' here",
-)
 async def test_internet_access_opens_the_public_internet(monkeypatch) -> None:
     """The other half of the egress story: under 'internet' a public address is
     reachable. Without this, a policy that silently denied everything would look
@@ -155,9 +140,26 @@ async def test_internet_access_opens_the_public_internet(monkeypatch) -> None:
         _sandbox, "_settings", _settings_with(network_access=_sandbox.NETWORK_INTERNET)
     )
 
-    exit_code, stdout = await run_python(_REACH % ("1.1.1.1", 53), timeout=20)
+    exit_code, stdout = await run_python(_REACH % _PUBLIC, timeout=20)
 
     assert (exit_code, stdout.strip()) == (0, "REACHED")
+
+
+async def test_internet_access_keeps_the_host_out(monkeypatch, host_listener) -> None:
+    """'internet' must not reach the host itself — the platform's own Postgres,
+    Redis and backend live there. 'all' reaching the same listener proves the
+    denial is the policy, not a listener the guest could never have reached."""
+    for access, expected in (
+        (_sandbox.NETWORK_INTERNET, "denied"),
+        (_sandbox.NETWORK_ALL, "REACHED"),
+    ):
+        monkeypatch.setattr(
+            _sandbox, "_settings", _settings_with(network_access=access)
+        )
+
+        exit_code, stdout = await run_python(_REACH % host_listener, timeout=20)
+
+        assert (access, exit_code, stdout.strip()) == (access, 0, expected)
 
 
 async def test_one_vm_serves_several_runs() -> None:

@@ -14,16 +14,6 @@ from nexctf_sandbox import _sandbox
 register_plugin(nexctf_sandbox.plugin, _sandbox.PLUGIN_SLUG)
 
 
-@pytest.fixture(autouse=True)
-def _assume_the_host_can_filter(
-    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Pretend this process holds CAP_NET_ADMIN, unless a test says otherwise."""
-    if request.node.get_closest_marker("real_capability_probe"):
-        return
-    monkeypatch.setattr(_sandbox, "_can_enforce_network", lambda: True)
-
-
 def _returns(exit_code: int, stdout: str = "") -> Callable:
     """Build an async run_python stub that always returns the given exit code and stdout."""
 

@@ -6,17 +6,14 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from functools import partial
-from pathlib import Path
 from uuid import uuid4
 
 from microsandbox import (
-    BackendKind,
     Image,
     Network,
     NetworkProfile,
     RootDisk,
     Sandbox,
-    default_backend_kind,
 )
 from pydantic import ValidationError
 
@@ -47,7 +44,6 @@ _DEFAULTS: dict[str, ConfigValue] = {
     "network_access": DEFAULT_NETWORK_ACCESS,
 }
 
-_CAP_NET_ADMIN = 12
 _MAX_OUTPUT_BYTES = 64 * 1024
 _RUN = (
     f"python3 /code.py >/out 2>/err; rc=$?; "
@@ -108,26 +104,6 @@ async def _settings() -> dict[str, ConfigValue]:
     return resolved
 
 
-def _can_enforce_network() -> bool:
-    """Whether a network policy set on a microVM is actually programmed.
-
-    Without CAP_NET_ADMIN microsandbox reports the policy as applied and leaves
-    egress unfiltered.
-    """
-    try:
-        if default_backend_kind() != BackendKind.LOCAL:
-            return True
-        status = Path("/proc/self/status").read_text()
-        caps = int(status.split("CapEff:")[1].split()[0], 16)
-    except Exception:
-        logger.warning(
-            "sandbox.network capability probe failed; assuming policy is enforced",
-            exc_info=True,
-        )
-        return True
-    return bool(caps >> _CAP_NET_ADMIN & 1)
-
-
 def _network(access: ConfigValue) -> Network:
     """Build the guest's egress policy from the ``network_access`` setting."""
     if access == NETWORK_INTERNET:
@@ -139,32 +115,9 @@ def _network(access: ConfigValue) -> Network:
     return Network.none()
 
 
-def _check_enforceable(access: ConfigValue, network: Network) -> None:
-    """Refuse to boot when *network* would silently not be applied."""
-    if network != Network.allow_all() and not _can_enforce_network():
-        raise RuntimeError(
-            f"network_access={access!r} cannot be enforced: this process has no "
-            "CAP_NET_ADMIN, so microsandbox would leave guest egress unfiltered. "
-            "Grant the capability, or set network_access="
-            f"{NETWORK_ALL!r} to accept unfiltered egress."
-        )
-
-
-if not _can_enforce_network():
-    logger.warning(
-        "sandbox.network host has no CAP_NET_ADMIN: microVM egress cannot be "
-        "filtered, so network_access=%r and %r are refused and only %r will boot",
-        NETWORK_DISABLED,
-        NETWORK_INTERNET,
-        NETWORK_ALL,
-    )
-
-
 @asynccontextmanager
 async def _ephemeral(cfg: dict[str, ConfigValue]):
-    access = cfg["network_access"]
-    network = _network(access)
-    _check_enforceable(access, network)
+    network = _network(cfg["network_access"])
     root_disk_mib = int(cfg["root_disk_mib"])
     name = f"nexctf-{uuid4().hex}"
     sb = None
