@@ -26,13 +26,14 @@ class _FakeSandbox:
     def __init__(self) -> None:
         self.fs = _FakeFs()
         self.shell_kwargs: dict | None = None
+        self.destroyed: list[bool] = []
 
     async def shell(self, cmd: str, *, stdin=None, timeout=None):
         self.shell_kwargs = {"cmd": cmd, "stdin": stdin, "timeout": timeout}
         return _FakeShellResult(0, "ok")
 
-    async def kill(self) -> None:
-        pass
+    async def destroy(self, *, force: bool = False, timeout=None) -> None:
+        self.destroyed.append(force)
 
 
 def _patch_sandbox(monkeypatch) -> tuple[_FakeSandbox, list[str]]:
@@ -78,19 +79,20 @@ def test_output_is_capped_in_the_guest() -> None:
     assert "exit $rc" in _sandbox._RUN  # the program's own exit code, not head's
 
 
-async def test_sandbox_is_removed_not_just_killed(monkeypatch) -> None:
-    """kill() leaves the registration and its disk on the host — remove() must follow,
-    or every submission leaks host disk permanently."""
-    _, removed = _patch_sandbox(monkeypatch)
+async def test_sandbox_is_destroyed_not_just_killed(monkeypatch) -> None:
+    """kill() leaves the registration and its disk on the host — the VM must be
+    removed too, or every submission leaks host disk permanently."""
+    fake, removed = _patch_sandbox(monkeypatch)
 
     await _sandbox.run_python("print('hi')", timeout=5)
 
-    assert len(removed) == 1
-    assert removed[0].startswith("nexctf-")
+    # Forced: nothing in the guest is worth a graceful stop.
+    assert fake.destroyed == [True]
+    assert removed == []
 
 
-async def test_sandbox_is_removed_when_the_run_raises(monkeypatch) -> None:
-    fake, removed = _patch_sandbox(monkeypatch)
+async def test_sandbox_is_destroyed_when_the_run_raises(monkeypatch) -> None:
+    fake, _ = _patch_sandbox(monkeypatch)
 
     async def _boom(*args, **kwargs):
         raise RuntimeError("exec blew up")
@@ -100,7 +102,23 @@ async def test_sandbox_is_removed_when_the_run_raises(monkeypatch) -> None:
     with pytest.raises(RuntimeError):
         await _sandbox.run_python("print('hi')", timeout=5)
 
+    assert fake.destroyed == [True]
+
+
+async def test_sandbox_is_removed_by_name_when_create_fails(monkeypatch) -> None:
+    """A create that fails partway can leave a record behind, with no handle to it."""
+    _, removed = _patch_sandbox(monkeypatch)
+
+    async def _fail(name, **kwargs):
+        raise RuntimeError("boot failed")
+
+    monkeypatch.setattr(_sandbox.Sandbox, "create", _fail)
+
+    with pytest.raises(RuntimeError):
+        await _sandbox.run_python("print('hi')", timeout=5)
+
     assert len(removed) == 1
+    assert removed[0].startswith("nexctf-")
 
 
 async def test_concurrent_runs_are_capped(monkeypatch) -> None:

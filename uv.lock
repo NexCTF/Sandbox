@@ -914,7 +914,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "microsandbox", specifier = ">=0.6.14" },
+    { name = "microsandbox", specifier = ">=0.7.4" },
     { name = "nexctf", specifier = ">=0.11,<1.0" },
 ]
 

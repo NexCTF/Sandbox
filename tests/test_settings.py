@@ -22,7 +22,7 @@ class _FakeSandbox:
     async def shell(self, cmd, *, stdin=None, timeout=None):
         return SimpleNamespace(exit_code=0, stdout_text="", stderr_text="")
 
-    async def kill(self) -> None:
+    async def destroy(self, *, force: bool = False, timeout=None) -> None:
         pass
 
 

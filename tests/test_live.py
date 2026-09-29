@@ -65,7 +65,7 @@ async def test_guest_writes_cost_no_host_disk() -> None:
 
 
 async def test_sandbox_is_deregistered_after_the_run() -> None:
-    """kill() only stops the VM; without remove() the record survives every run."""
+    """kill() only stops the VM; destroy() must remove it, or the record survives every run."""
     await run_python("print('hi')", timeout=20)
 
     assert await _nexctf_sandboxes() == []

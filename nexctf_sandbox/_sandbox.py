@@ -180,15 +180,13 @@ async def _ephemeral(cfg: dict[str, ConfigValue]):
         )
         yield sb
     finally:
-        if sb is not None:
-            try:
-                await sb.kill()
-            except Exception:
-                logger.warning("sandbox.kill failed name=%s", name, exc_info=True)
         try:
-            await Sandbox.remove(name)
+            if sb is not None:
+                await sb.destroy(force=True)
+            else:
+                await Sandbox.remove(name)
         except Exception:
-            logger.warning("sandbox.remove failed name=%s", name, exc_info=True)
+            logger.warning("sandbox.destroy failed name=%s", name, exc_info=True)
 
 
 async def _exec(sb, code: str, stdin: str = "", *, timeout: int) -> tuple[int, str]:
